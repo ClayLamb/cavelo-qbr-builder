@@ -382,19 +382,21 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
   {
     const s = addS();
     addChrome(s, pres, "01", "EXEC SUMMARY", GREEN);
-    addTitle(s, "Executive summary", `Where your environment stands · ${period.quarter}`);
+    addTitle(s, "Executive summary", `Where your environment stands this quarter`);
 
     const tp = risk.testsPassed, tf = risk.testsFailed;
     const totalTests = (tp != null && tf != null) ? tp + tf : null;
 
+    // Sublabels intentionally short — ~14-18 chars max — so they fit
+    // inside the 2.95"-wide cards without wrapping or clipping. The
+    // accent color already conveys severity so we don't repeat the
+    // category text alongside numeric context.
     addStatCard(s, pres, {
       x:0.5, y:2.1, w:2.95, h:1.55,
       accentColor: accentForCat(risk.riskScoreCat),
       label: "DATA RISK SCORE",
       value: fmtScore(risk.riskScore),
-      sublabel: risk.riskScoreCat
-        ? `${risk.riskScoreCat}  ·  industry ${fmtScore(risk.industryScore)}`
-        : `industry baseline ${fmtScore(risk.industryScore)}`,
+      sublabel: risk.riskScoreCat || `Industry ${fmtScore(risk.industryScore)}`,
       valueSize: 44,
     });
 
@@ -404,7 +406,7 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
       label: "POTENTIAL COST OF BREACH",
       value: fmtCurrency(risk.costOfBreach),
       sublabel: risk.instancesFound != null
-        ? `${fmt(risk.instancesFound)} PII instances discovered`
+        ? `${fmt(risk.instancesFound)} PII instances`
         : "Sensitive data exposure",
       valueSize: 38,
     });
@@ -415,8 +417,8 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
       label: "VULNERABILITY RISK",
       value: fmtScore(risk.vulnRisk),
       sublabel: risk.maxCVSS != null
-        ? `${risk.vulnRiskCat || ""}  ·  max CVSS ${fmtScore(risk.maxCVSS, 1)}`.trim()
-        : (risk.vulnRiskCat || "—"),
+        ? `Max CVSS ${fmtScore(risk.maxCVSS, 1)}`
+        : (risk.vulnRiskCat || ""),
       valueSize: 44,
     });
 
@@ -425,7 +427,7 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
       accentColor: accentForCat(risk.benchmarkRiskCat),
       label: "CIS BENCHMARK FAILURES",
       value: fmt(tf),
-      sublabel: totalTests != null ? `of ${fmt(totalTests)} total tests` : "Configuration baseline",
+      sublabel: totalTests != null ? `of ${fmt(totalTests)} tests` : "Configuration baseline",
       valueSize: 28,
     });
 
@@ -434,8 +436,8 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
       accentColor: AMBER,
       label: "NONCOMPLIANT HOSTS",
       value: fmt(risk.noncompliantHosts),
-      sublabel: (risk.unapprovedSoftware != null || risk.missingSoftware != null)
-        ? `${fmt(risk.unapprovedSoftware)} unapproved · ${fmt(risk.missingSoftware)} missing`
+      sublabel: risk.unapprovedSoftware != null
+        ? `${fmt(risk.unapprovedSoftware)} unapproved`
         : "Software policy gaps",
       valueSize: 28,
     });
@@ -446,8 +448,8 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
       label: "PERMISSION RISK",
       value: fmtScore(risk.permissionRisk),
       sublabel: risk.outlierDirs != null
-        ? `${fmt(risk.outlierDirs)} outlier directories`
-        : (risk.permissionRiskCat || "—"),
+        ? `${fmt(risk.outlierDirs)} outliers`
+        : (risk.permissionRiskCat || ""),
       valueSize: 28,
     });
   }
@@ -704,7 +706,7 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
       label: "MISSING SOFTWARE",
       value: fmt(risk.missingSoftware),
       sublabel: risk.unapprovedSoftware != null
-        ? `${fmt(risk.unapprovedSoftware)} unapproved · ${fmt(risk.mandatoryApps)} mandatory`
+        ? `${fmt(risk.unapprovedSoftware)} unapproved apps`
         : "Hosts missing required apps",
       valueSize: 32,
     });
