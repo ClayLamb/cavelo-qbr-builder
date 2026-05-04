@@ -125,7 +125,59 @@ function parseRiskReport(text) {
     topHostInstances:   null,
     topConnectorCost:   null,
     connectorInstances: null,
+
+    // Tabular data we CAN extract — see parseTopAtRiskTable() below.
+    topConnectors: parseTopAtRiskTable(text_, "Top at-risk Connectors"),
+    topAgents:     parseTopAtRiskTable(text_, "Top at-risk Agents"),
   };
+}
+
+// Cavelo's "Top at-risk X" tables in the PDF render with the source name
+// on one line and the score columns concatenated on the next line:
+//
+//     Top at-risk Connectors
+//     SourceScoreData CostBenchmarkPermission
+//     Cavelo o365 Tenant
+//     3.94.00.03.5
+//     cavelodata google workspace
+//     2.22.0n/a3.0
+//     ...
+//
+// We capture the section between the heading and the next blank-line
+// break, then walk it as alternating name / score-row pairs. Returns
+// up to 10 rows of { name, score } sorted by score descending. The
+// first numeric token on each score row is the overall "Score" column.
+function parseTopAtRiskTable(text, heading) {
+  const headIdx = text.indexOf(heading);
+  if (headIdx < 0) return [];
+  // Section ends at the next "Top at-risk" or "Data Risk Report / PAGE"
+  const tail = text.slice(headIdx + heading.length, headIdx + heading.length + 4000);
+  const endIdx = Math.min(
+    ...["Top at-risk", "Data Risk Report / PAGE", "Top 5 ", "Recommendations"]
+      .map(m => { const i = tail.indexOf(m); return i < 0 ? Infinity : i; }),
+  );
+  const section = tail.slice(0, endIdx === Infinity ? tail.length : endIdx);
+
+  // Split on newlines, drop the column-header row + blank lines.
+  const lines = section.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  // First line is the column-header concatenation ("SourceScoreData Cost...")
+  // — skip it. Every subsequent pair (name, score-row) is a record.
+  const rows = [];
+  for (let i = 1; i < lines.length - 1; i += 2) {
+    const name      = lines[i];
+    const scoreRow  = lines[i + 1];
+    // Score row starts with the overall "Score" column. Cavelo scores
+    // are always X.Y (e.g. "3.9", "4.4") concatenated with adjacent
+    // columns ("3.94.00.03.5" = 3.9 + 4.0 + 0.0 + 3.5). Match exactly
+    // one digit + decimal + one digit so we don't slurp the next column.
+    const m = scoreRow.match(/^(\d\.\d|n\/a)/i);
+    if (!m || /^\d/.test(name)) continue;
+    const score = m[1].toLowerCase() === "n/a" ? null : parseFloat(m[1]);
+    rows.push({ name, score });
+  }
+  // Sort by score (nulls last) and cap at 10.
+  rows.sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity));
+  return rows.slice(0, 10);
 }
 
 function parseVulnAudit(text) {
@@ -411,26 +463,27 @@ async function buildDeck({ risk, vuln, prospectName, mspName, mspUrl, primaryCol
     addChrome(s, pres, "02", "DATA DISCOVERY", GREEN);
     addTitle(s, "Where your sensitive data lives", `${fmt(risk.instancesFound)} instances of PII discovered across your environment`);
 
-    // Platform counts will come from a proper table extractor later — for
-    // now skip platforms whose count couldn't be parsed (was returning fake
-    // demo numbers like "Box 26" before).
-    const platforms = [
-      { name: "Microsoft 365",     count: risk.connectorInstances, color: RED },
-      { name: "Windows endpoints", count: risk.topHostInstances,   color: AMBER },
-    ].filter(p => p.count != null);
+    // Top 5 at-risk Connectors from the Risk Report. Bar width tracks
+    // the Cavelo "Score" column (0-5 scale, scaled against the section's
+    // max). Color reflects severity: 4+ red, 3+ amber, otherwise blue.
+    const connectors = (risk.topConnectors || [])
+      .filter(c => c.score != null && c.score > 0)
+      .slice(0, 5);
+    const colorForScore = (s) => s >= 4 ? RED : s >= 3 ? AMBER : BLUE;
     s.addText("TOP PLATFORMS BY EXPOSURE", { x:0.5, y:2.1, w:4.4, h:0.3, fontSize:10, bold:true, color:GREEN, fontFace:"Calibri", charSpacing:1.5, valign:"middle", margin:0 });
-    const maxCount = platforms.length ? platforms[0].count : 1;
-    if (!platforms.length) {
-      s.addText("Detail not available — see Cavelo Data Risk Report for breakdown",
+    if (!connectors.length) {
+      s.addText("No at-risk connectors detected — see Cavelo Data Risk Report for detail",
         { x:0.5, y:2.5, w:4.4, h:0.4, fontSize:11, italic:true, color:MUTED, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
     }
-    platforms.forEach((p, i) => {
+    const maxScore = connectors[0]?.score || 5;
+    connectors.forEach((p, i) => {
       const yPos = 2.5 + i * 0.45;
-      const barW = (p.count / maxCount) * 3.0;
+      const barW = (p.score / maxScore) * 3.0;
+      const color = colorForScore(p.score);
       s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:yPos+0.1, w:3.0, h:0.2, fill:{ color:BG_MID }, line:{ color:BG_MID } });
-      s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:yPos+0.1, w:barW, h:0.2, fill:{ color:p.color }, line:{ color:p.color } });
-      s.addText(p.name, { x:0.5, y:yPos-0.15, w:2.5, h:0.25, fontSize:11, color:WHITE, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
-      s.addText(fmt(p.count), { x:3.6, y:yPos, w:1.0, h:0.4, fontSize:12, bold:true, color:LIGHT, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
+      s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:yPos+0.1, w:barW, h:0.2, fill:{ color }, line:{ color } });
+      s.addText(p.name, { x:0.5, y:yPos-0.15, w:2.9, h:0.25, fontSize:11, color:WHITE, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
+      s.addText(p.score.toFixed(1), { x:3.6, y:yPos, w:1.0, h:0.4, fontSize:12, bold:true, color:LIGHT, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
     });
 
     s.addText("MOST AT-RISK DATA TYPES", { x:5.3, y:2.1, w:4.2, h:0.3, fontSize:10, bold:true, color:GREEN, fontFace:"Calibri", charSpacing:1.5, valign:"middle", margin:0 });
