@@ -6,60 +6,124 @@
 const busboy   = require("busboy");
 const pptxgen  = require("pptxgenjs");
 
-// ─── PDF text extractor (lightweight, no native deps) ────────────────────────
-// Pulls raw text strings from a PDF buffer using regex on the content stream.
-// Good enough for Cavelo's text-based PDF exports.
-function extractPDFText(buffer) {
-  const str = buffer.toString("latin1");
-  const texts = [];
-  const re = /\(([^)]{1,300})\)\s*T[jJ]/g;
-  let m;
-  while ((m = re.exec(str)) !== null) {
-    const t = m[1]
-      .replace(/\\n/g, " ").replace(/\\r/g, " ")
-      .replace(/\\t/g, " ").replace(/\\\\/g, "\\")
-      .replace(/\\([()\\])/g, "$1")
-      .trim();
-    if (t.length > 1) texts.push(t);
-  }
-  return texts.join(" ");
+// ─── PDF text extractor ─────────────────────────────────────────────────────
+// Uses pdf-parse to handle FlateDecode-compressed streams (every real Cavelo
+// export is compressed). Dynamic import because pdf-parse v2 is ESM-only and
+// this file is CommonJS.
+async function extractPDFText(buffer) {
+  const { PDFParse } = await import("pdf-parse");
+  const parser = new PDFParse({ data: buffer });
+  const result = await parser.getText();
+  return (typeof result === "string" ? result : (result?.text || "")) || "";
 }
 
 // ─── DATA PARSERS ─────────────────────────────────────────────────────────────
 
 function parseRiskReport(text) {
-  const num = (re, fallback = 0) => {
-    const m = text.match(re);
-    return m ? parseFloat(m[1].replace(/,/g, "")) : fallback;
-  };
-  const str = (re, fallback = "") => {
-    const m = text.match(re);
-    return m ? m[1].trim() : fallback;
+  // Cavelo PDF format puts the NUMBER first and the LABEL on the next line:
+  //   4.4 (Very High)
+  //   Cavelo Data Risk Score
+  // The category in parens is sometimes present (risk-style scores) and
+  // sometimes absent (counts like "1,838 Instances Found").
+  //
+  // Strategy: for each metric, search for "<number> [(<category>)]\n<label>"
+  // and return both the number and the category. Returns null for both if
+  // not found — callers must render "Not detected" or similar, NOT a fake
+  // fallback. Demo values used to leak through silently and look real.
+
+  const text_ = String(text || "");
+
+  // Generic: match a number (with optional comma/decimal) followed by an
+  // optional "(Category)" then any whitespace then the label text.
+  // The "$" terminator on the label keeps us from accidentally matching
+  // a longer label that contains this label as a substring.
+  const grab = (label) => {
+    const labelEsc = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(
+      "([\\d][\\d,]*(?:\\.\\d+)?)" +     // number
+      "\\s*(?:\\(([^)]+)\\))?" +          // optional (category)
+      "\\s*\\n?\\s*" +
+      labelEsc + "(?:\\s|$)",             // label, terminated
+      "m",
+    );
+    const m = text_.match(re);
+    if (!m) return { value: null, category: null };
+    return {
+      value:    parseFloat(m[1].replace(/,/g, "")),
+      category: (m[2] || null),
+    };
   };
 
+  // Some metrics are written inline ("$295,566" then label, or "55 hosts"
+  // then "Unapproved Software"). The same generic grab() handles them
+  // because the number-then-label pattern is consistent. The only awkward
+  // case is currency: PDF has "$295,566\nCost of Breach" — the $ comes
+  // before the digits, so strip it.
+  const grabCurrency = (label) => {
+    const labelEsc = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(
+      "\\$\\s*([\\d][\\d,]*)\\s*\\n?\\s*" + labelEsc + "(?:\\s|$)",
+      "m",
+    );
+    const m = text_.match(re);
+    return m ? parseFloat(m[1].replace(/,/g, "")) : null;
+  };
+
+  // Inline colon format: "Label: 1,234" (used for Entities Discovered,
+  // Outlier Directories under the Permission Risk section, etc.).
+  const grabAfter = (label) => {
+    const labelEsc = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(labelEsc + "[:\\s]+([\\d][\\d,]*(?:\\.\\d+)?)", "m");
+    const m = text_.match(re);
+    return m ? parseFloat(m[1].replace(/,/g, "")) : null;
+  };
+
+  const riskScore       = grab("Cavelo Data Risk Score");
+  const industryScore   = grab("Cavelo Industry Risk Score");
+  const dataCostRisk    = grab("Data Cost Risk");
+  const benchmarkRisk   = grab("Benchmark Risk");
+  const vulnRisk        = grab("Vulnerability Risk");        // first match: endpoint
+  const networkVulnRisk = grab("Network Vulnerability Risk");
+  const permissionRisk  = grab("Permission Risk");
+
   return {
-    riskScore:        num(/Cavelo Data Risk Score\s*([\d.]+)/, 4.4),
-    industryScore:    num(/Cavelo Industry Risk Score\s*([\d.]+)/, 3.4),
-    costOfBreach:     num(/Cost of Breach[:\s]*\$([\d,]+)/, 295566),
-    instancesFound:   num(/Instances Found[:\s]*([\d,]+)/, 1838),
-    benchmarkRisk:    num(/Benchmark Risk\s*([\d.]+)/, 4.9),
-    testsPassed:      num(/Tests Passed\s*([\d,]+)/, 1628),
-    testsFailed:      num(/Tests Failed\s*([\d,]+)/, 5498),
-    vulnRisk:         num(/Vulnerability Risk\s*([\d.]+)/, 4.9),
-    maxEPSS:          num(/Max EPSS Score\s*([\d.]+)/, 0.94484),
-    maxCVSS:          num(/Max CVSS Score\s*([\d.]+)/, 10.0),
-    permissionRisk:   num(/Permission Risk\s*([\d.]+)/, 3.5),
-    outlierDirs:      num(/Outlier Directories[:\s]*([\d,]+)/, 4608),
-    noncompliantHosts: num(/Noncompliant.*?([\d]+)\s*Hosts/, 68),
-    unapprovedSoftware: num(/Unapproved Software[:\s]*([\d]+)/, 55),
-    missingSoftware:  num(/Missing.*?[:\s]*([\d]+)\s*hosts/, 42),
-    approvedApps:     num(/Approved Applications\s*([\d,]+)/, 1365),
-    approvedPublishers: num(/Approved Publishers\s*([\d,]+)/, 108),
-    topHostCost:      num(/Source Cost[:\s]*\$([\d,]+)/, 123898),
-    topConnectorCost: num(/\$([\d,]+)\s*Instances[:\s]*\d+\s*Source[:\s]*Cavelo o365/, 147368),
-    topHostName:      str(/Source[:\s]*(LAPTOP-\S+)/, "LAPTOP-FEAIVATS"),
-    topHostInstances: num(/Instances[:\s]*([\d,]+)\s*Source[:\s]*LAPTOP/, 760),
-    connectorInstances: num(/Instances[:\s]*([\d]+)\s*Source[:\s]*Cavelo o365/, 916),
+    // Risk scores — number + category label as they appear on the report
+    riskScore:        riskScore.value,        riskScoreCat:        riskScore.category,
+    industryScore:    industryScore.value,    industryScoreCat:    industryScore.category,
+    dataCostRisk:     dataCostRisk.value,     dataCostRiskCat:     dataCostRisk.category,
+    benchmarkRisk:    benchmarkRisk.value,    benchmarkRiskCat:    benchmarkRisk.category,
+    vulnRisk:         vulnRisk.value,         vulnRiskCat:         vulnRisk.category,
+    networkVulnRisk:  networkVulnRisk.value,  networkVulnRiskCat:  networkVulnRisk.category,
+    permissionRisk:   permissionRisk.value,   permissionRiskCat:   permissionRisk.category,
+
+    // Currency — Cost of Breach
+    costOfBreach:     grabCurrency("Cost of Breach"),
+
+    // Counts (number-then-label pattern, no parens/category)
+    instancesFound:     grab("Instances Found").value,
+    testsPassed:        grab("Tests Passed").value,
+    testsFailed:        grab("Tests Failed").value,
+    maxEPSS:            grab("Max EPSS Score").value,
+    maxCVSS:            grab("Max CVSS Score").value,
+    outlierDirs:        grabAfter("Outlier Directories"),
+    entitiesDiscovered: grabAfter("Entities Discovered"),
+    noncompliantHosts:  grab("Noncompliant Hosts").value || grab("Noncompliant Agents").value,
+    unapprovedSoftware: grab("Unapproved Software").value,
+    missingSoftware:    grab("Missing Software").value || grab("Missing Required").value,
+    approvedApps:       grab("Approved Applications").value,
+    approvedPublishers: grab("Approved Publishers").value,
+    mandatoryApps:      grab("Mandatory Apps").value,
+
+    // Top-host / top-connector fields are surfaced on slide 3 (Data
+    // Discovery) and slide 10 (CIS Benchmarks). The Cavelo PDF carries
+    // these values inside tables that don't parse cleanly with regex —
+    // returning null so those slides render "—" until we add a proper
+    // table extractor. The OLD parser shipped fake fallback values.
+    topHostName:        null,
+    topHostCost:        null,
+    topHostInstances:   null,
+    topConnectorCost:   null,
+    connectorInstances: null,
   };
 }
 
@@ -157,11 +221,33 @@ function addFootnote(s, text) {
   });
 }
 
-function fmt(n) { return n.toLocaleString(); }
+function fmt(n) {
+  if (n == null) return "—";
+  return Number(n).toLocaleString();
+}
 function fmtCurrency(n) {
+  if (n == null) return "—";
   if (n >= 1000000) return `$${(n/1000000).toFixed(1)}M`;
   if (n >= 1000) return `$${Math.round(n/1000)}K`;
   return `$${fmt(n)}`;
+}
+// Render a parsed score as "4.4" with optional category sublabel from PDF.
+// Returns "—" when value is null so demo defaults can't leak through.
+function fmtScore(n, decimals = 1) {
+  if (n == null) return "—";
+  return Number(n).toFixed(decimals);
+}
+// "Q2 2026", "April 2026" — both derived from current date so the deck
+// auto-rolls quarter without code changes.
+function periodLabels(date = new Date()) {
+  const months = ["January","February","March","April","May","June",
+                  "July","August","September","October","November","December"];
+  const q = Math.floor(date.getMonth() / 3) + 1;
+  return {
+    quarter:    `Q${q} ${date.getFullYear()}`,
+    nextQuarter:`Q${q === 4 ? 1 : q + 1} ${q === 4 ? date.getFullYear() + 1 : date.getFullYear()}`,
+    monthYear:  `${months[date.getMonth()]} ${date.getFullYear()}`,
+  };
 }
 
 // ─── DECK BUILDER ─────────────────────────────────────────────────────────────
@@ -179,37 +265,143 @@ async function buildDeck({ risk, vuln, prospectName, mspName, mspUrl, primaryCol
   const G_LIGHT = "DCFCE7";
   const G_TEXT  = "15803D";
 
+  const period = periodLabels();
+
   const pres = new pptxgen();
   pres.layout  = "LAYOUT_16x9";
-  pres.title   = `${prospectName} QBR — Q4 2024`;
+  pres.title   = `${prospectName} QBR — ${period.quarter}`;
   pres.author  = mspName;
 
   const addS = () => { const s = pres.addSlide(); s.background = { color: BG }; return s; };
+
+  // Risk-score severity → card accent color. Driven by the parsed
+  // category from the PDF, not hardcoded.
+  const accentForCat = (cat) => {
+    const c = (cat || "").toLowerCase();
+    if (c.includes("very high") || c.includes("critical")) return RED;
+    if (c.includes("high"))     return RED;
+    if (c.includes("moderate") || c.includes("medium"))    return AMBER;
+    if (c.includes("low"))      return GREEN;
+    return AMBER;
+  };
 
   // ── SLIDE 1: COVER ──────────────────────────────────────────────────────
   {
     const s = addS();
     addChrome(s, pres, "", "", GREEN);
-    s.addText("Q4 2024", { x:0.5, y:1.7, w:9, h:0.4, fontSize:16, color:GREEN, fontFace:"Calibri", bold:true, align:"left", valign:"middle", margin:0, charSpacing:2 });
+    s.addText(period.quarter, { x:0.5, y:1.7, w:9, h:0.4, fontSize:16, color:GREEN, fontFace:"Calibri", bold:true, align:"left", valign:"middle", margin:0, charSpacing:2 });
     s.addText("Quarterly Business Review", { x:0.5, y:2.15, w:9, h:0.85, fontSize:48, bold:true, color:WHITE, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
     s.addText(prospectName, { x:0.5, y:3.05, w:9, h:0.55, fontSize:28, color:GREEN, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
-    s.addText(`Prepared by ${mspName}  ·  October 2024`, { x:0.5, y:3.7, w:9, h:0.3, fontSize:12, color:MUTED, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
+    s.addText(`Prepared by ${mspName}  ·  ${period.monthYear}`, { x:0.5, y:3.7, w:9, h:0.3, fontSize:12, color:MUTED, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
     s.addText(mspUrl.replace(/^https?:\/\//,""), { x:0.5, y:5.2, w:4, h:0.3, fontSize:10, color:MUTED, fontFace:"Calibri", bold:true, align:"left", valign:"middle", margin:0 });
   }
 
   // ── SLIDE 2: EXEC SUMMARY ────────────────────────────────────────────────
+  // Six stat cards laid out 3x2. Every value flows from the parsed PDF;
+  // categories ("Very High", "High", etc.) come straight from the report
+  // text rather than being computed in code. When the optional Vuln Audit
+  // PDF isn't uploaded, the two vuln-dependent slots fall back to two
+  // risk-report-only metrics (Permission Risk and Outlier Directories)
+  // instead of rendering "—" placeholders.
   {
     const s = addS();
     addChrome(s, pres, "01", "EXEC SUMMARY", GREEN);
-    addTitle(s, "Executive summary", "Where your environment stands this quarter");
+    addTitle(s, "Executive summary", `Where your environment stands · ${period.quarter}`);
 
-    const totalTests = risk.testsPassed + risk.testsFailed;
-    addStatCard(s, pres, { x:0.5, y:2.1, w:2.95, h:1.55, accentColor:RED, label:"RISK SCORE", value:risk.riskScore.toFixed(1), sublabel:"Very High", valueSize:44 });
-    addStatCard(s, pres, { x:3.55, y:2.1, w:2.95, h:1.55, accentColor:AMBER, label:"POTENTIAL COST OF BREACH", value:fmtCurrency(risk.costOfBreach), sublabel:`${fmt(risk.instancesFound)} PII instances found`, valueSize:38 });
-    addStatCard(s, pres, { x:6.6, y:2.1, w:2.85, h:1.55, accentColor:RED, label:"ACTIVE THREATS", value:String(vuln ? vuln.exploitable : "—"), sublabel:"Exploitable in the wild", valueSize:44 });
-    addStatCard(s, pres, { x:0.5, y:3.8, w:2.95, h:1.25, accentColor:AMBER, label:"CIS BENCHMARK FAILURES", value:fmt(risk.testsFailed), sublabel:`of ${fmt(totalTests)} total tests`, valueSize:28 });
-    addStatCard(s, pres, { x:3.55, y:3.8, w:2.95, h:1.25, accentColor:AMBER, label:"NONCOMPLIANT HOSTS", value:String(risk.noncompliantHosts), sublabel:"Software policy gaps", valueSize:28 });
-    addStatCard(s, pres, { x:6.6, y:3.8, w:2.85, h:1.25, accentColor:AMBER, label:"VISIBILITY GAP", value:vuln ? `${vuln.failedHosts} of ${vuln.totalHosts}` : "—", sublabel:"Endpoints unreachable", valueSize:28 });
+    const tp = risk.testsPassed, tf = risk.testsFailed;
+    const totalTests = (tp != null && tf != null) ? tp + tf : null;
+
+    // Card 1 — overall risk score (always present, accent color driven by category)
+    addStatCard(s, pres, {
+      x:0.5, y:2.1, w:2.95, h:1.55,
+      accentColor: accentForCat(risk.riskScoreCat),
+      label: "DATA RISK SCORE",
+      value: fmtScore(risk.riskScore),
+      sublabel: risk.riskScoreCat
+        ? `${risk.riskScoreCat}  ·  industry ${fmtScore(risk.industryScore)}`
+        : `industry baseline ${fmtScore(risk.industryScore)}`,
+      valueSize: 44,
+    });
+
+    // Card 2 — cost of breach
+    addStatCard(s, pres, {
+      x:3.55, y:2.1, w:2.95, h:1.55,
+      accentColor: AMBER,
+      label: "POTENTIAL COST OF BREACH",
+      value: fmtCurrency(risk.costOfBreach),
+      sublabel: risk.instancesFound != null
+        ? `${fmt(risk.instancesFound)} PII instances discovered`
+        : "Sensitive data exposure",
+      valueSize: 38,
+    });
+
+    // Card 3 — exploitable threats (vuln) OR vulnerability risk score (risk-only fallback)
+    if (vuln && vuln.exploitable != null) {
+      addStatCard(s, pres, {
+        x:6.6, y:2.1, w:2.85, h:1.55,
+        accentColor: RED,
+        label: "EXPLOITABLE VULNERABILITIES",
+        value: String(vuln.exploitable),
+        sublabel: "Active in the wild",
+        valueSize: 44,
+      });
+    } else {
+      addStatCard(s, pres, {
+        x:6.6, y:2.1, w:2.85, h:1.55,
+        accentColor: accentForCat(risk.vulnRiskCat),
+        label: "VULNERABILITY RISK",
+        value: fmtScore(risk.vulnRisk),
+        sublabel: risk.maxCVSS != null
+          ? `${risk.vulnRiskCat || ""}  ·  max CVSS ${fmtScore(risk.maxCVSS, 1)}`.trim()
+          : (risk.vulnRiskCat || "—"),
+        valueSize: 44,
+      });
+    }
+
+    // Card 4 — CIS benchmark failures
+    addStatCard(s, pres, {
+      x:0.5, y:3.8, w:2.95, h:1.25,
+      accentColor: accentForCat(risk.benchmarkRiskCat),
+      label: "CIS BENCHMARK FAILURES",
+      value: fmt(tf),
+      sublabel: totalTests != null ? `of ${fmt(totalTests)} total tests` : "Configuration baseline",
+      valueSize: 28,
+    });
+
+    // Card 5 — noncompliant hosts (software policy)
+    addStatCard(s, pres, {
+      x:3.55, y:3.8, w:2.95, h:1.25,
+      accentColor: AMBER,
+      label: "NONCOMPLIANT HOSTS",
+      value: fmt(risk.noncompliantHosts),
+      sublabel: (risk.unapprovedSoftware != null || risk.missingSoftware != null)
+        ? `${fmt(risk.unapprovedSoftware)} unapproved · ${fmt(risk.missingSoftware)} missing`
+        : "Software policy gaps",
+      valueSize: 28,
+    });
+
+    // Card 6 — visibility gap (vuln) OR permission risk + outlier dirs (risk-only)
+    if (vuln && vuln.failedHosts != null && vuln.totalHosts != null) {
+      addStatCard(s, pres, {
+        x:6.6, y:3.8, w:2.85, h:1.25,
+        accentColor: AMBER,
+        label: "VISIBILITY GAP",
+        value: `${vuln.failedHosts} of ${vuln.totalHosts}`,
+        sublabel: "Endpoints unreachable to scan",
+        valueSize: 28,
+      });
+    } else {
+      addStatCard(s, pres, {
+        x:6.6, y:3.8, w:2.85, h:1.25,
+        accentColor: accentForCat(risk.permissionRiskCat),
+        label: "PERMISSION RISK",
+        value: fmtScore(risk.permissionRisk),
+        sublabel: risk.outlierDirs != null
+          ? `${fmt(risk.outlierDirs)} outlier directories`
+          : (risk.permissionRiskCat || "—"),
+        valueSize: 28,
+      });
+    }
   }
 
   // ── SLIDE 3: DATA DISCOVERY ──────────────────────────────────────────────
@@ -218,15 +410,19 @@ async function buildDeck({ risk, vuln, prospectName, mspName, mspUrl, primaryCol
     addChrome(s, pres, "02", "DATA DISCOVERY", GREEN);
     addTitle(s, "Where your sensitive data lives", `${fmt(risk.instancesFound)} instances of PII discovered across your environment`);
 
+    // Platform counts will come from a proper table extractor later — for
+    // now skip platforms whose count couldn't be parsed (was returning fake
+    // demo numbers like "Box 26" before).
     const platforms = [
       { name: "Microsoft 365",     count: risk.connectorInstances, color: RED },
       { name: "Windows endpoints", count: risk.topHostInstances,   color: AMBER },
-      { name: "Google Workspace",  count: 84,  color: BLUE },
-      { name: "iManage",           count: 52,  color: BLUE },
-      { name: "Box",               count: 26,  color: BLUE },
-    ];
+    ].filter(p => p.count != null);
     s.addText("TOP PLATFORMS BY EXPOSURE", { x:0.5, y:2.1, w:4.4, h:0.3, fontSize:10, bold:true, color:GREEN, fontFace:"Calibri", charSpacing:1.5, valign:"middle", margin:0 });
-    const maxCount = platforms[0].count;
+    const maxCount = platforms.length ? platforms[0].count : 1;
+    if (!platforms.length) {
+      s.addText("Detail not available — see Cavelo Data Risk Report for breakdown",
+        { x:0.5, y:2.5, w:4.4, h:0.4, fontSize:11, italic:true, color:MUTED, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
+    }
     platforms.forEach((p, i) => {
       const yPos = 2.5 + i * 0.45;
       const barW = (p.count / maxCount) * 3.0;
@@ -271,16 +467,16 @@ async function buildDeck({ risk, vuln, prospectName, mspName, mspUrl, primaryCol
     s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:3.4, w:4.4, h:1.65, fill:{ color:BG_MID }, line:{ color:BG_MID } });
     s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:3.4, w:4.4, h:0.08, fill:{ color:AMBER }, line:{ color:AMBER } });
     s.addText("TOP HOST EXPOSURE", { x:0.7, y:3.55, w:4, h:0.3, fontSize:9, bold:true, color:AMBER, fontFace:"Calibri", charSpacing:1, valign:"middle", margin:0 });
-    s.addText(`$${fmt(risk.topHostCost)}`, { x:0.7, y:3.85, w:4, h:0.55, fontSize:28, bold:true, color:WHITE, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
-    s.addText(`${risk.topHostName}  ·  ${fmt(risk.topHostInstances)} PII instances`, { x:0.7, y:4.4, w:4, h:0.3, fontSize:11, color:LIGHT, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
+    s.addText(risk.topHostCost != null ? `$${fmt(risk.topHostCost)}` : "—", { x:0.7, y:3.85, w:4, h:0.55, fontSize:28, bold:true, color:WHITE, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
+    s.addText(risk.topHostName ? `${risk.topHostName}  ·  ${fmt(risk.topHostInstances)} PII instances` : "Detail not available — see report", { x:0.7, y:4.4, w:4, h:0.3, fontSize:11, color:LIGHT, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
     s.addText("Drivers Licenses, Health Cards, Credit Cards, Passports", { x:0.7, y:4.7, w:4, h:0.3, fontSize:9, color:MUTED, fontFace:"Calibri", italic:true, align:"left", valign:"middle", margin:0 });
 
     // Top connector card
     s.addShape(pres.shapes.RECTANGLE, { x:5.1, y:3.4, w:4.4, h:1.65, fill:{ color:BG_MID }, line:{ color:BG_MID } });
     s.addShape(pres.shapes.RECTANGLE, { x:5.1, y:3.4, w:4.4, h:0.08, fill:{ color:AMBER }, line:{ color:AMBER } });
     s.addText("TOP CONNECTOR EXPOSURE", { x:5.3, y:3.55, w:4, h:0.3, fontSize:9, bold:true, color:AMBER, fontFace:"Calibri", charSpacing:1, valign:"middle", margin:0 });
-    s.addText(`$${fmt(risk.topConnectorCost)}`, { x:5.3, y:3.85, w:4, h:0.55, fontSize:28, bold:true, color:WHITE, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
-    s.addText(`Microsoft 365 Tenant  ·  ${fmt(risk.connectorInstances)} PII instances`, { x:5.3, y:4.4, w:4, h:0.3, fontSize:11, color:LIGHT, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
+    s.addText(risk.topConnectorCost != null ? `$${fmt(risk.topConnectorCost)}` : "—", { x:5.3, y:3.85, w:4, h:0.55, fontSize:28, bold:true, color:WHITE, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
+    s.addText(risk.connectorInstances != null ? `Microsoft 365 Tenant  ·  ${fmt(risk.connectorInstances)} PII instances` : "Detail not available — see report", { x:5.3, y:4.4, w:4, h:0.3, fontSize:11, color:LIGHT, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
     s.addText("17 distinct PII types including SSN, IBAN, Steuer-ID", { x:5.3, y:4.7, w:4, h:0.3, fontSize:9, color:MUTED, fontFace:"Calibri", italic:true, align:"left", valign:"middle", margin:0 });
 
     addFootnote(s, "Cost calculated using IBM Cost of a Data Breach Report industry averages applied to discovered PII volume.");
@@ -428,7 +624,9 @@ async function buildDeck({ risk, vuln, prospectName, mspName, mspUrl, primaryCol
       s.addText(g, { x:0.7, y:yPos, w:8.7, h:0.23, fontSize:10, color:LIGHT, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
     });
 
-    addFootnote(s, `CIS = Center for Internet Security benchmarks. Highest cost host: ${risk.topHostName} ($${fmt(risk.topHostCost)} source cost) with Very High failure rate.`);
+    addFootnote(s, risk.topHostName
+      ? `CIS = Center for Internet Security benchmarks. Highest cost host: ${risk.topHostName} ($${fmt(risk.topHostCost)} source cost) with Very High failure rate.`
+      : "CIS = Center for Internet Security benchmarks. Source: Cavelo Data Risk Report.");
   }
 
   // ── SLIDE 11: VISIBILITY GAPS ────────────────────────────────────────────
@@ -508,9 +706,9 @@ exports.handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ error: "Data Risk Report PDF is required." }) };
     }
 
-    // Extract text from PDFs
-    const riskText = extractPDFText(files.riskPdf.buffer);
-    const vulnText = files.vulnPdf ? extractPDFText(files.vulnPdf.buffer) : null;
+    // Extract text from PDFs (async — pdf-parse handles compressed streams)
+    const riskText = await extractPDFText(files.riskPdf.buffer);
+    const vulnText = files.vulnPdf ? await extractPDFText(files.vulnPdf.buffer) : null;
 
     // Parse data
     const risk = parseRiskReport(riskText);
@@ -534,8 +732,9 @@ exports.handler = async (event) => {
       logoDataUri:  logoData,
     });
 
-    const safeName = (prospectName || "Client").replace(/[^a-zA-Z0-9]/g, "_");
-    const filename = `${safeName}_QBR_Q4_2024.pptx`;
+    const safeName  = (prospectName || "Client").replace(/[^a-zA-Z0-9]/g, "_");
+    const safePeriod = periodLabels().quarter.replace(/\s+/g, "_");
+    const filename  = `${safeName}_QBR_${safePeriod}.pptx`;
 
     return {
       statusCode: 200,

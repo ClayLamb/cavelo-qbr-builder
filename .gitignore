@@ -1,5 +1,11 @@
 node_modules/
+package-lock.json
 .env
 .netlify/
 *.pptx
 *.pdf
+
+# Dev test scripts (smoke tests, parser audits) — not for production
+_*.mjs
+_*.js
+
