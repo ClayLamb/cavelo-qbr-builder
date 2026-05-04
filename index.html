@@ -687,7 +687,7 @@
   }
 
   function animateSteps() {
-    const ids = ["s1","s2","s3","s4","s5"], delays = [400,2500,5000,7500,11000];
+    const ids = ["s1","s2","s3","s4"], delays = [400,2500,5000,7500];
     ids.forEach((id,i) => setTimeout(() => {
       if (i > 0) document.getElementById(ids[i-1]).classList.replace("active","done");
       document.getElementById(id).classList.add("active");
@@ -702,7 +702,7 @@
     document.getElementById("dz-risk").classList.remove("ready","over");
     document.getElementById("gen-btn").disabled = true;
     document.getElementById("gen-err").classList.remove("on");
-    ["s1","s2","s3","s4","s5"].forEach(id => document.getElementById(id).className = "lstep");
+    ["s1","s2","s3","s4"].forEach(id => document.getElementById(id).className = "lstep");
     show("main-screen");
   }
 

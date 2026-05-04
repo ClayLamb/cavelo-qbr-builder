@@ -459,21 +459,38 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
     s.addText("Total potential cost of breach", { x:4.6, y:2.35, w:4.7, h:0.35, fontSize:14, color:LIGHT, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
     s.addText("Calculated across all sensitive data discovered", { x:4.6, y:2.7, w:4.7, h:0.3, fontSize:11, color:MUTED, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
 
+    // Top host + Top connector cards. Cavelo's Risk Report renders the
+    // dollar exposure per host/connector inside chart graphics that don't
+    // extract as text — but the report DOES carry the "Top at-risk Agents"
+    // and "Top at-risk Connectors" tables, which give us the same ranking
+    // by a 0-5 risk score. We surface the top entry from each as a
+    // name + score pair.
+    const topAgent     = (risk.topAgents     || [])[0] || null;
+    const topConnector = (risk.topConnectors || []).filter(c => c.score != null && c.score > 0)[0] || null;
+
     // Top host card
     s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:3.4, w:4.4, h:1.65, fill:{ color:BG_MID }, line:{ color:BG_MID } });
     s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:3.4, w:4.4, h:0.08, fill:{ color:AMBER }, line:{ color:AMBER } });
-    s.addText("TOP HOST EXPOSURE", { x:0.7, y:3.55, w:4, h:0.3, fontSize:9, bold:true, color:AMBER, fontFace:"Calibri", charSpacing:1, valign:"middle", margin:0 });
-    s.addText(risk.topHostCost != null ? `$${fmt(risk.topHostCost)}` : "—", { x:0.7, y:3.85, w:4, h:0.55, fontSize:28, bold:true, color:WHITE, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
-    s.addText(risk.topHostName ? `${risk.topHostName}  ·  ${fmt(risk.topHostInstances)} PII instances` : "Detail not available — see report", { x:0.7, y:4.4, w:4, h:0.3, fontSize:11, color:LIGHT, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
-    s.addText("Drivers Licenses, Health Cards, Credit Cards, Passports", { x:0.7, y:4.7, w:4, h:0.3, fontSize:9, color:MUTED, fontFace:"Calibri", italic:true, align:"left", valign:"middle", margin:0 });
+    s.addText("HIGHEST-RISK HOST", { x:0.7, y:3.55, w:4, h:0.3, fontSize:9, bold:true, color:AMBER, fontFace:"Calibri", charSpacing:1, valign:"middle", margin:0 });
+    s.addText(topAgent ? topAgent.name : "—", { x:0.7, y:3.85, w:4, h:0.45, fontSize:20, bold:true, color:WHITE, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
+    s.addText(topAgent && topAgent.score != null
+      ? `Risk score ${topAgent.score.toFixed(1)} of 5`
+      : "Detail not available — see report",
+      { x:0.7, y:4.35, w:4, h:0.3, fontSize:11, color:LIGHT, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
+    s.addText("Top entry from the Risk Report's Top at-risk Agents table",
+      { x:0.7, y:4.7, w:4, h:0.3, fontSize:9, color:MUTED, fontFace:"Calibri", italic:true, align:"left", valign:"middle", margin:0 });
 
     // Top connector card
     s.addShape(pres.shapes.RECTANGLE, { x:5.1, y:3.4, w:4.4, h:1.65, fill:{ color:BG_MID }, line:{ color:BG_MID } });
     s.addShape(pres.shapes.RECTANGLE, { x:5.1, y:3.4, w:4.4, h:0.08, fill:{ color:AMBER }, line:{ color:AMBER } });
-    s.addText("TOP CONNECTOR EXPOSURE", { x:5.3, y:3.55, w:4, h:0.3, fontSize:9, bold:true, color:AMBER, fontFace:"Calibri", charSpacing:1, valign:"middle", margin:0 });
-    s.addText(risk.topConnectorCost != null ? `$${fmt(risk.topConnectorCost)}` : "—", { x:5.3, y:3.85, w:4, h:0.55, fontSize:28, bold:true, color:WHITE, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
-    s.addText(risk.connectorInstances != null ? `Microsoft 365 Tenant  ·  ${fmt(risk.connectorInstances)} PII instances` : "Detail not available — see report", { x:5.3, y:4.4, w:4, h:0.3, fontSize:11, color:LIGHT, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
-    s.addText("17 distinct PII types including SSN, IBAN, Steuer-ID", { x:5.3, y:4.7, w:4, h:0.3, fontSize:9, color:MUTED, fontFace:"Calibri", italic:true, align:"left", valign:"middle", margin:0 });
+    s.addText("HIGHEST-RISK CONNECTOR", { x:5.3, y:3.55, w:4, h:0.3, fontSize:9, bold:true, color:AMBER, fontFace:"Calibri", charSpacing:1, valign:"middle", margin:0 });
+    s.addText(topConnector ? topConnector.name : "—", { x:5.3, y:3.85, w:4, h:0.45, fontSize:20, bold:true, color:WHITE, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
+    s.addText(topConnector && topConnector.score != null
+      ? `Risk score ${topConnector.score.toFixed(1)} of 5`
+      : "Detail not available — see report",
+      { x:5.3, y:4.35, w:4, h:0.3, fontSize:11, color:LIGHT, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
+    s.addText("Top entry from the Risk Report's Top at-risk Connectors table",
+      { x:5.3, y:4.7, w:4, h:0.3, fontSize:9, color:MUTED, fontFace:"Calibri", italic:true, align:"left", valign:"middle", margin:0 });
 
     addFootnote(s, "Cost calculated using IBM Cost of a Data Breach Report industry averages applied to discovered PII volume.");
   }
