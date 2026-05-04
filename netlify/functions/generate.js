@@ -7,14 +7,15 @@ const busboy   = require("busboy");
 const pptxgen  = require("pptxgenjs");
 
 // ─── PDF text extractor ─────────────────────────────────────────────────────
-// Uses pdf-parse to handle FlateDecode-compressed streams (every real Cavelo
-// export is compressed). Dynamic import because pdf-parse v2 is ESM-only and
-// this file is CommonJS.
+// Uses pdf-parse@1.x — a thin CommonJS wrapper around older pdfjs that runs
+// in Node/Netlify Functions without the DOMMatrix polyfill that pdf-parse@2
+// (newer pdfjs) needs. Handles FlateDecode-compressed streams natively, so
+// real Cavelo exports parse correctly (the original raw-regex extractor saw
+// 0 chars on compressed PDFs).
+const pdfParse = require("pdf-parse");
 async function extractPDFText(buffer) {
-  const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ data: buffer });
-  const result = await parser.getText();
-  return (typeof result === "string" ? result : (result?.text || "")) || "";
+  const result = await pdfParse(buffer);
+  return result && typeof result.text === "string" ? result.text : "";
 }
 
 // ─── DATA PARSERS ─────────────────────────────────────────────────────────────
