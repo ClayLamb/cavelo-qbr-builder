@@ -334,17 +334,17 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
       {
         term: "Vulnerability",
         nick: '"An open door"',
-        defn: "A weakness in software or systems that could let an attacker in. Like an unlocked window on a building — the door is not necessarily being kicked in, but it is there to be used. Some are urgent. Others are minor.",
+        defn: "A weakness in software or systems that could let an attacker in. Like an unlocked window on a building. Some are urgent. Others are minor.",
       },
       {
         term: "Sensitive Data / PII",
         nick: '"Personal Information"',
-        defn: "Any data that can identify a specific person — names, addresses, health records, credit card numbers, government IDs, banking details. The kind of information that, if it leaks, you are legally required to disclose.",
+        defn: "Any data that identifies a specific person, such as names, addresses, health records, credit card numbers, government IDs, and banking details. The kind of information that, if it leaks, you are legally required to disclose.",
       },
       {
         term: "CIS Benchmarks",
         nick: '"Industry Standards"',
-        defn: "A set of basic security expectations the whole industry has agreed on. Think of it like a building code for cybersecurity — there are minimum standards, and we measure how your environment compares against them.",
+        defn: "A set of basic security expectations the whole industry has agreed on. Think of it like a building code for cybersecurity. There are minimum standards, and we measure how your environment compares against them.",
       },
       {
         term: "Permissions",
@@ -354,23 +354,28 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
       {
         term: "Cost of Breach",
         nick: '"What it would cost if data walked out the door"',
-        defn: "An estimate of the financial exposure if the sensitive data found in your environment were stolen or exposed. Includes regulatory fines, notification costs, and liability. Based on IBM industry data.",
+        defn: "An estimate of the financial exposure if the sensitive data in your environment were stolen or exposed. Includes regulatory fines, notification costs, and liability. Based on IBM industry data.",
       },
     ];
 
-    // Single-column rows. Left ~30% of width holds bold term + green
-    // italic nickname; right ~70% holds the definition paragraph.
-    const rowH = 0.66, leftW = 2.8, rightW = 6.2;
+    // Row layout: outer box from x=0.5, w=9.0 → ends at x=9.5.
+    // Left band (term + nickname) starts at x=0.7. Right band (definition)
+    // starts at x = 0.7 + leftW + gap. Right band width is computed so
+    // the text never extends past x = 9.5 - 0.2 (right padding).
+    const rowH = 0.66, leftW = 2.8, gap = 0.15, rightPad = 0.2;
+    const ROW_X = 0.5, ROW_W = 9.0;
+    const rightX = ROW_X + 0.2 + leftW + gap;
+    const rightW = (ROW_X + ROW_W) - rightPad - rightX;
     terms.forEach((t, i) => {
       const y = 2.05 + i * (rowH + 0.06);
       // Row background + green left edge accent
-      s.addShape(pres.shapes.RECTANGLE, { x: 0.5, y, w: 9.0, h: rowH, fill: { color: BG_MID }, line: { color: BG_MID } });
-      s.addShape(pres.shapes.RECTANGLE, { x: 0.5, y, w: 0.06, h: rowH, fill: { color: GREEN }, line: { color: GREEN } });
+      s.addShape(pres.shapes.RECTANGLE, { x: ROW_X, y, w: ROW_W, h: rowH, fill: { color: BG_MID }, line: { color: BG_MID } });
+      s.addShape(pres.shapes.RECTANGLE, { x: ROW_X, y, w: 0.06, h: rowH, fill: { color: GREEN }, line: { color: GREEN } });
       // Term (bold white) + nickname (green italic) stacked in the left band
       s.addText(t.term, { x: 0.7, y: y + 0.06, w: leftW, h: 0.28, fontSize: 13, bold: true, color: WHITE, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
       s.addText(t.nick, { x: 0.7, y: y + 0.34, w: leftW, h: 0.26, fontSize: 10, italic: true, color: GREEN, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
-      // Definition (plain) in the right band
-      s.addText(t.defn, { x: 0.7 + leftW + 0.15, y: y + 0.06, w: rightW, h: rowH - 0.12, fontSize: 10, color: LIGHT, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
+      // Definition — width clamped to stay inside the row box
+      s.addText(t.defn, { x: rightX, y: y + 0.06, w: rightW, h: rowH - 0.12, fontSize: 10, color: LIGHT, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
     });
   }
 
