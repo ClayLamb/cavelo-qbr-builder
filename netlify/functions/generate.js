@@ -321,6 +321,59 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
     s.addText(mspUrl.replace(/^https?:\/\//,""), { x:0.5, y:5.2, w:4, h:0.3, fontSize:10, color:MUTED, fontFace:"Calibri", bold:true, align:"left", valign:"middle", margin:0 });
   }
 
+  // ── SLIDE: DEFINITIONS (Non-Technical and Business personas only) ───────
+  // Inserted right after the cover so non-expert readers (owners / office
+  // managers / business stakeholders) have plain-English vocabulary before
+  // hitting any data. Tech-aware and above skip this slide entirely.
+  if (literacy === "non_technical" || literacy === "business") {
+    const s = addS();
+    addChrome(s, pres, "00", "DEFINITIONS", GREEN);
+    addTitle(s, "A few quick definitions", "Before we get into the numbers, here is what a few of these terms actually mean.");
+
+    const terms = [
+      {
+        term: "Vulnerability",
+        nick: '"An open door"',
+        defn: "A weakness in software or systems that could let an attacker in. Like an unlocked window on a building — the door is not necessarily being kicked in, but it is there to be used. Some are urgent. Others are minor.",
+      },
+      {
+        term: "Sensitive Data / PII",
+        nick: '"Personal Information"',
+        defn: "Any data that can identify a specific person — names, addresses, health records, credit card numbers, government IDs, banking details. The kind of information that, if it leaks, you are legally required to disclose.",
+      },
+      {
+        term: "CIS Benchmarks",
+        nick: '"Industry Standards"',
+        defn: "A set of basic security expectations the whole industry has agreed on. Think of it like a building code for cybersecurity — there are minimum standards, and we measure how your environment compares against them.",
+      },
+      {
+        term: "Permissions",
+        nick: '"Who has the keys"',
+        defn: "Which users or accounts have access to which files, folders, and systems. Overly broad permissions mean more people can reach sensitive data than actually need to.",
+      },
+      {
+        term: "Cost of Breach",
+        nick: '"What it would cost if data walked out the door"',
+        defn: "An estimate of the financial exposure if the sensitive data found in your environment were stolen or exposed. Includes regulatory fines, notification costs, and liability. Based on IBM industry data.",
+      },
+    ];
+
+    // Single-column rows. Left ~30% of width holds bold term + green
+    // italic nickname; right ~70% holds the definition paragraph.
+    const rowH = 0.66, leftW = 2.8, rightW = 6.2;
+    terms.forEach((t, i) => {
+      const y = 2.05 + i * (rowH + 0.06);
+      // Row background + green left edge accent
+      s.addShape(pres.shapes.RECTANGLE, { x: 0.5, y, w: 9.0, h: rowH, fill: { color: BG_MID }, line: { color: BG_MID } });
+      s.addShape(pres.shapes.RECTANGLE, { x: 0.5, y, w: 0.06, h: rowH, fill: { color: GREEN }, line: { color: GREEN } });
+      // Term (bold white) + nickname (green italic) stacked in the left band
+      s.addText(t.term, { x: 0.7, y: y + 0.06, w: leftW, h: 0.28, fontSize: 13, bold: true, color: WHITE, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
+      s.addText(t.nick, { x: 0.7, y: y + 0.34, w: leftW, h: 0.26, fontSize: 10, italic: true, color: GREEN, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
+      // Definition (plain) in the right band
+      s.addText(t.defn, { x: 0.7 + leftW + 0.15, y: y + 0.06, w: rightW, h: rowH - 0.12, fontSize: 10, color: LIGHT, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
+    });
+  }
+
   // ── SLIDE 2: EXEC SUMMARY ────────────────────────────────────────────────
   // Six stat cards in a 3x2 grid. Every value comes from the parsed Risk
   // Report; severity categories ("Very High", "High", etc.) are pulled
