@@ -320,7 +320,7 @@
 <main>
   <div class="hero">
     <h1>Two Reports → <span>One QBR Deck</span></h1>
-    <p>Upload a Cavelo Data Risk Report and Endpoint Vulnerability Audit. Get a client-ready PowerPoint in seconds.</p>
+    <p>Upload a Cavelo Data Risk Report PDF. Get a client-ready PowerPoint in seconds.</p>
   </div>
 
   <!-- MAIN FORM -->
@@ -414,27 +414,17 @@
           <div class="file-badge" id="risk-file-badge"></div>
         </div>
       </div>
-      <div class="card">
-        <div class="card-label">Step 2 — Vulnerability Audit PDF <span style="color:#4A5568;font-size:10px;font-weight:400;margin-left:6px">optional</span></div>
-        <div class="drop-zone drop-zone-optional" id="dz-vuln">
-          <input type="file" id="vuln-pdf-input" accept=".pdf" onchange="handleVulnPDF(this.files[0])">
-          <div class="drop-icon">🛡</div>
-          <div class="drop-title" id="vuln-drop-title">Drop Vuln Audit PDF</div>
-          <div class="drop-sub">Cavelo Endpoint Vulnerability Audit</div>
-          <div class="file-badge" id="vuln-file-badge"></div>
-        </div>
-      </div>
     </div>
 
     <!-- Row 2: Client + Persona -->
     <div class="row">
       <div class="card" style="flex: 0 0 260px">
-        <div class="card-label">Step 3 — Client Details</div>
+        <div class="card-label">Step 2 — Client Details</div>
         <label>Client company name</label>
         <input type="text" id="prospect-name" placeholder="Acme Corp" style="margin-bottom:0">
       </div>
       <div class="card" style="flex: 1">
-        <div class="card-label">Step 4 — Audience Profile</div>
+        <div class="card-label">Step 3 — Audience Profile</div>
         <div class="persona-row">
           <div>
             <label>Company size</label>
@@ -468,10 +458,9 @@
       <div class="spin"></div>
       <div class="loading-title">Building your QBR deck…</div>
       <div class="lstep" id="s1">📊 Reading Data Risk Report</div>
-      <div class="lstep" id="s2">🛡 Reading Vulnerability Audit</div>
-      <div class="lstep" id="s3">🎨 Matching persona &amp; literacy level</div>
-      <div class="lstep" id="s4">📐 Building slides</div>
-      <div class="lstep" id="s5">✅ Packaging PowerPoint</div>
+      <div class="lstep" id="s2">🎨 Matching persona &amp; literacy level</div>
+      <div class="lstep" id="s3">📐 Building slides</div>
+      <div class="lstep" id="s4">✅ Packaging PowerPoint</div>
     </div>
   </div>
 
@@ -481,7 +470,7 @@
       <div class="sicon">🎉</div>
       <div class="stitle">Your QBR deck is ready</div>
       <div class="ssub" id="s-filename"></div>
-      <div class="notice">🔒 <strong>Zero data retained.</strong> Both PDFs were processed entirely in memory and never written to disk or stored anywhere on our servers.</div>
+      <div class="notice">🔒 <strong>Zero data retained.</strong> The PDF was processed entirely in memory and never written to disk or stored anywhere on our servers.</div>
       <button class="btn btn-outline" onclick="reset()">Build another deck</button>
     </div>
   </div>
@@ -492,7 +481,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  let riskPDF = null, vulnPDF = null, logoFile = null;
+  let riskPDF = null, logoFile = null;
 
   // ── DRAG & DROP ─────────────────────────────────────────────────────────
 
@@ -503,7 +492,6 @@
     dz.addEventListener("drop", e => { e.preventDefault(); dz.classList.remove("over"); handler(e.dataTransfer.files[0]); });
   }
   setupDrop("dz-risk", handleRiskPDF);
-  setupDrop("dz-vuln", handleVulnPDF);
 
   const ldz = document.getElementById("logo-drop");
   ldz.addEventListener("dragover",  e => { e.preventDefault(); ldz.classList.add("over"); });
@@ -516,15 +504,6 @@
     document.getElementById("dz-risk").classList.add("ready");
     document.getElementById("risk-file-badge").textContent = "✓ " + f.name;
     document.getElementById("risk-drop-title").textContent = "Risk Report ready";
-    checkReady();
-  }
-
-  function handleVulnPDF(f) {
-    if (!f || f.type !== "application/pdf") return;
-    vulnPDF = f;
-    document.getElementById("dz-vuln").classList.add("ready");
-    document.getElementById("vuln-file-badge").textContent = "✓ " + f.name;
-    document.getElementById("vuln-drop-title").textContent = "Vuln Audit ready";
     checkReady();
   }
 
@@ -668,7 +647,6 @@
 
     const fd = new FormData();
     fd.append("riskPdf",      riskPDF);
-    if (vulnPDF) fd.append("vulnPdf", vulnPDF);
     fd.append("prospectName", prospectName);
     fd.append("mspName",      mspName);
     fd.append("mspUrl",       mspUrl);
@@ -717,14 +695,11 @@
   }
 
   function reset() {
-    riskPDF = null; vulnPDF = null;
-    ["risk-pdf-input","vuln-pdf-input","prospect-name"].forEach(id => document.getElementById(id).value = "");
+    riskPDF = null;
+    ["risk-pdf-input","prospect-name"].forEach(id => document.getElementById(id).value = "");
     document.getElementById("risk-file-badge").textContent = "";
-    document.getElementById("vuln-file-badge").textContent = "";
     document.getElementById("risk-drop-title").textContent = "Drop Risk Report PDF";
-    document.getElementById("vuln-drop-title").textContent = "Drop Vuln Audit PDF";
     document.getElementById("dz-risk").classList.remove("ready","over");
-    document.getElementById("dz-vuln").classList.remove("ready","over");
     document.getElementById("gen-btn").disabled = true;
     document.getElementById("gen-err").classList.remove("on");
     ["s1","s2","s3","s4","s5"].forEach(id => document.getElementById(id).className = "lstep");

@@ -1,7 +1,6 @@
 // generate.js
-// Parses Cavelo Data Risk Report + Endpoint Vulnerability Audit PDFs
-// Builds a 12-slide QBR deck using pptxgenjs
-// Returns .pptx as a binary download
+// Parses a Cavelo Data Risk Report PDF and builds a 10-slide QBR deck
+// using pptxgenjs. Returns .pptx as a binary download.
 
 const busboy   = require("busboy");
 const pptxgen  = require("pptxgenjs");
@@ -180,38 +179,11 @@ function parseTopAtRiskTable(text, heading) {
   return rows.slice(0, 10);
 }
 
-function parseVulnAudit(text) {
-  if (!text) return null;
-  const num = (re, fallback = 0) => {
-    const m = text.match(re);
-    return m ? parseFloat(m[1].replace(/,/g, "")) : fallback;
-  };
-
-  const totalVulns    = num(/Total Unique Vulnerabilities\s*(\d+)/, 12);
-  const totalCVEs     = num(/Total Unique CVEs\s*(\d+)/, 316);
-  const highestCVSS   = num(/CVSS Score Highest\s*([\d.]+)/, 9.8);
-  const highestEPSS   = num(/EPSS\s*Score\s*([\d.]+)/, 0.95265);
-  const cvssVeryHigh  = num(/Very High\s*(\d+)\s*$/, 7);
-  const cvssHigh      = num(/(\d+)\s*High/, 1);
-  const cvssMedium    = num(/(\d+)\s*Medium/, 4);
-
-  // Estimate exploitable from CVSS Very High + High
-  const exploitable   = Math.min(cvssVeryHigh + cvssHigh, totalVulns);
-  const knownIssues   = Math.max(totalVulns - exploitable, 0);
-
-  // Failed hosts
-  const failedHosts   = (text.match(/Failed/g) || []).length;
-  const successHosts  = (text.match(/Success/g) || []).length;
-  const totalHosts    = failedHosts + successHosts;
-
-  return {
-    totalVulns, totalCVEs, highestCVSS, highestEPSS,
-    exploitable, knownIssues,
-    failedHosts: Math.min(failedHosts, 8),
-    totalHosts:  totalHosts > 0 ? totalHosts : 19,
-    cvssMedium, cvssHigh, cvssVeryHigh,
-  };
-}
+// parseVulnAudit removed — Cavelo doesn't expose a separate Endpoint
+// Vulnerability Audit PDF in production. The deck is now built from a
+// single Risk Report. Vulnerability info comes from the Risk Report's
+// Vulnerability Summary section (vulnRisk score, maxCVSS, maxEPSS,
+// networkVulnRisk) which parseRiskReport already extracts.
 
 // ─── SLIDE HELPERS ─────────────────────────────────────────────────────────────
 
@@ -305,7 +277,7 @@ function periodLabels(date = new Date()) {
 
 // ─── DECK BUILDER ─────────────────────────────────────────────────────────────
 
-async function buildDeck({ risk, vuln, prospectName, mspName, mspUrl, primaryColor, literacy, clientSize, logoDataUri }) {
+async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, literacy, clientSize, logoDataUri }) {
   const GREEN  = primaryColor || "3DBB8F";
   const RED    = "EF4444";
   const AMBER  = "F59E0B";
@@ -350,12 +322,10 @@ async function buildDeck({ risk, vuln, prospectName, mspName, mspUrl, primaryCol
   }
 
   // ── SLIDE 2: EXEC SUMMARY ────────────────────────────────────────────────
-  // Six stat cards laid out 3x2. Every value flows from the parsed PDF;
-  // categories ("Very High", "High", etc.) come straight from the report
-  // text rather than being computed in code. When the optional Vuln Audit
-  // PDF isn't uploaded, the two vuln-dependent slots fall back to two
-  // risk-report-only metrics (Permission Risk and Outlier Directories)
-  // instead of rendering "—" placeholders.
+  // Six stat cards in a 3x2 grid. Every value comes from the parsed Risk
+  // Report; severity categories ("Very High", "High", etc.) are pulled
+  // straight from the PDF rather than computed in code, so the accent
+  // colors match Cavelo's own classification.
   {
     const s = addS();
     addChrome(s, pres, "01", "EXEC SUMMARY", GREEN);
@@ -364,7 +334,6 @@ async function buildDeck({ risk, vuln, prospectName, mspName, mspUrl, primaryCol
     const tp = risk.testsPassed, tf = risk.testsFailed;
     const totalTests = (tp != null && tf != null) ? tp + tf : null;
 
-    // Card 1 — overall risk score (always present, accent color driven by category)
     addStatCard(s, pres, {
       x:0.5, y:2.1, w:2.95, h:1.55,
       accentColor: accentForCat(risk.riskScoreCat),
@@ -376,7 +345,6 @@ async function buildDeck({ risk, vuln, prospectName, mspName, mspUrl, primaryCol
       valueSize: 44,
     });
 
-    // Card 2 — cost of breach
     addStatCard(s, pres, {
       x:3.55, y:2.1, w:2.95, h:1.55,
       accentColor: AMBER,
@@ -388,30 +356,17 @@ async function buildDeck({ risk, vuln, prospectName, mspName, mspUrl, primaryCol
       valueSize: 38,
     });
 
-    // Card 3 — exploitable threats (vuln) OR vulnerability risk score (risk-only fallback)
-    if (vuln && vuln.exploitable != null) {
-      addStatCard(s, pres, {
-        x:6.6, y:2.1, w:2.85, h:1.55,
-        accentColor: RED,
-        label: "EXPLOITABLE VULNERABILITIES",
-        value: String(vuln.exploitable),
-        sublabel: "Active in the wild",
-        valueSize: 44,
-      });
-    } else {
-      addStatCard(s, pres, {
-        x:6.6, y:2.1, w:2.85, h:1.55,
-        accentColor: accentForCat(risk.vulnRiskCat),
-        label: "VULNERABILITY RISK",
-        value: fmtScore(risk.vulnRisk),
-        sublabel: risk.maxCVSS != null
-          ? `${risk.vulnRiskCat || ""}  ·  max CVSS ${fmtScore(risk.maxCVSS, 1)}`.trim()
-          : (risk.vulnRiskCat || "—"),
-        valueSize: 44,
-      });
-    }
+    addStatCard(s, pres, {
+      x:6.6, y:2.1, w:2.85, h:1.55,
+      accentColor: accentForCat(risk.vulnRiskCat),
+      label: "VULNERABILITY RISK",
+      value: fmtScore(risk.vulnRisk),
+      sublabel: risk.maxCVSS != null
+        ? `${risk.vulnRiskCat || ""}  ·  max CVSS ${fmtScore(risk.maxCVSS, 1)}`.trim()
+        : (risk.vulnRiskCat || "—"),
+      valueSize: 44,
+    });
 
-    // Card 4 — CIS benchmark failures
     addStatCard(s, pres, {
       x:0.5, y:3.8, w:2.95, h:1.25,
       accentColor: accentForCat(risk.benchmarkRiskCat),
@@ -421,7 +376,6 @@ async function buildDeck({ risk, vuln, prospectName, mspName, mspUrl, primaryCol
       valueSize: 28,
     });
 
-    // Card 5 — noncompliant hosts (software policy)
     addStatCard(s, pres, {
       x:3.55, y:3.8, w:2.95, h:1.25,
       accentColor: AMBER,
@@ -433,28 +387,16 @@ async function buildDeck({ risk, vuln, prospectName, mspName, mspUrl, primaryCol
       valueSize: 28,
     });
 
-    // Card 6 — visibility gap (vuln) OR permission risk + outlier dirs (risk-only)
-    if (vuln && vuln.failedHosts != null && vuln.totalHosts != null) {
-      addStatCard(s, pres, {
-        x:6.6, y:3.8, w:2.85, h:1.25,
-        accentColor: AMBER,
-        label: "VISIBILITY GAP",
-        value: `${vuln.failedHosts} of ${vuln.totalHosts}`,
-        sublabel: "Endpoints unreachable to scan",
-        valueSize: 28,
-      });
-    } else {
-      addStatCard(s, pres, {
-        x:6.6, y:3.8, w:2.85, h:1.25,
-        accentColor: accentForCat(risk.permissionRiskCat),
-        label: "PERMISSION RISK",
-        value: fmtScore(risk.permissionRisk),
-        sublabel: risk.outlierDirs != null
-          ? `${fmt(risk.outlierDirs)} outlier directories`
-          : (risk.permissionRiskCat || "—"),
-        valueSize: 28,
-      });
-    }
+    addStatCard(s, pres, {
+      x:6.6, y:3.8, w:2.85, h:1.25,
+      accentColor: accentForCat(risk.permissionRiskCat),
+      label: "PERMISSION RISK",
+      value: fmtScore(risk.permissionRisk),
+      sublabel: risk.outlierDirs != null
+        ? `${fmt(risk.outlierDirs)} outlier directories`
+        : (risk.permissionRiskCat || "—"),
+      valueSize: 28,
+    });
   }
 
   // ── SLIDE 3: DATA DISCOVERY ──────────────────────────────────────────────
@@ -581,88 +523,64 @@ async function buildDeck({ risk, vuln, prospectName, mspName, mspUrl, primaryCol
     drawPositive(5.1, risk.approvedPublishers, "Approved publishers");
   }
 
-  // ── SLIDE 7: VULN CURRENT STATE ───────────────────────────────────────────
-  if (vuln) {
-    const s = addS();
-    addChrome(s, pres, "06", "VULN OVERVIEW", GREEN);
-    addTitle(s, "Endpoint vulnerabilities: where you stand", "October 2024 endpoint scan results");
-
-    addStatCard(s, pres, { x:0.5, y:2.05, w:2.95, h:1.85, accentColor:RED, label:"ACTIVE THREATS", value:String(vuln.exploitable), sublabel:"Exploitable in the wild", valueSize:56 });
-    addStatCard(s, pres, { x:3.55, y:2.05, w:2.95, h:1.85, accentColor:AMBER, label:"KNOWN ISSUES", value:String(vuln.knownIssues), sublabel:"High severity, not yet exploited", valueSize:56 });
-    addStatCard(s, pres, { x:6.6, y:2.05, w:2.85, h:1.85, accentColor:BLUE, label:"MONITORING", value:String(vuln.totalVulns), sublabel:"Total unique vulnerabilities", valueSize:56 });
-
-    // Risk concentration
-    s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:4.1, w:4.5, h:0.95, fill:{ color:BG_MID }, line:{ color:GREEN, width:1 } });
-    s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:4.1, w:0.08, h:0.95, fill:{ color:GREEN }, line:{ color:GREEN } });
-    s.addText("Risk concentration", { x:0.75, y:4.18, w:3, h:0.3, fontSize:12, bold:true, color:GREEN, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
-    s.addText("Domain controller driving most exposure", { x:0.75, y:4.45, w:2.8, h:0.28, fontSize:10, color:LIGHT, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
-    s.addText("10 of 12", { x:3.2, y:4.2, w:1.7, h:0.4, fontSize:20, bold:true, color:WHITE, fontFace:"Calibri", align:"right", valign:"middle", margin:0 });
-    s.addText("on demo-dc-1", { x:3.2, y:4.6, w:1.7, h:0.3, fontSize:9, color:MUTED, fontFace:"Calibri", align:"right", valign:"middle", margin:0 });
-
-    // Visibility gap
-    s.addShape(pres.shapes.RECTANGLE, { x:5.2, y:4.1, w:4.3, h:0.95, fill:{ color:BG_MID }, line:{ color:AMBER, width:1 } });
-    s.addShape(pres.shapes.RECTANGLE, { x:5.2, y:4.1, w:0.08, h:0.95, fill:{ color:AMBER }, line:{ color:AMBER } });
-    s.addText("Visibility gap to close", { x:5.45, y:4.18, w:4, h:0.3, fontSize:12, bold:true, color:AMBER, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
-    s.addText(`${vuln.failedHosts} of ${vuln.totalHosts} endpoints could not be reached. We are not seeing the full picture until those machines come back online.`, { x:5.45, y:4.45, w:3.95, h:0.55, fontSize:10, color:LIGHT, fontFace:"Calibri", align:"left", valign:"top", margin:0 });
-
-    addFootnote(s, `Highest CVSS this scan: ${vuln.highestCVSS} (Very High). Highest EPSS: ${vuln.highestEPSS} (Very High). Full CVE list in source Vuln Audit PDF.`);
-  }
-
-  // ── SLIDE 8: VULN QUARTERLY ACTIVITY ────────────────────────────────────
-  if (vuln) {
-    const s = addS();
-    addChrome(s, pres, "07", "QUARTERLY ACTIVITY", GREEN);
-    addTitle(s, "What we're addressing this quarter", "Top vulnerabilities prioritized for remediation");
-
-    const items = [
-      { title:"Critical Windows update KB5025229", sub:"Highest exploitability score this scan — patching in progress", accent:RED, badge:"In progress" },
-      { title:"Critical Windows update KB5031361", sub:"Domain controller — maintenance window scheduled", accent:RED, badge:"Scheduled" },
-      { title:"HTTP/2 Rapid Reset vulnerability",  sub:".NET runtime and Visual Studio patches identified", accent:AMBER, badge:"Scheduled" },
-      { title:"Browser engine vulnerability (WebP)",sub:"Chrome/Edge updates pending on affected workstations", accent:AMBER, badge:"In progress" },
-      { title:"WinVerifyTrust signature validation",sub:`${vuln.totalHosts - vuln.failedHosts} endpoints across the fleet — legacy patch rollout planned`, accent:AMBER, badge:"Planned" },
-    ];
-    items.forEach((v, i) => {
-      const yPos = 2.1 + i * 0.55;
-      s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:yPos, w:9, h:0.48, fill:{ color:BG_MID }, line:{ color:BG_MID } });
-      s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:yPos, w:0.08, h:0.48, fill:{ color:v.accent }, line:{ color:v.accent } });
-      s.addText(v.title, { x:0.75, y:yPos+0.04, w:6.5, h:0.24, fontSize:11, bold:true, color:WHITE, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
-      s.addText(v.sub,   { x:0.75, y:yPos+0.25, w:6.5, h:0.2,  fontSize:9,  color:LIGHT, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
-      s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x:8.4, y:yPos+0.13, w:1.0, h:0.24, fill:{ color:G_LIGHT }, line:{ color:G_LIGHT }, rectRadius:0.04 });
-      s.addText(v.badge, { x:8.4, y:yPos+0.13, w:1.0, h:0.24, fontSize:9, bold:true, color:G_TEXT, fontFace:"Calibri", align:"center", valign:"middle", margin:0 });
-    });
-
-    addFootnote(s, "Tracked CVEs include CVE-2023-21554, CVE-2023-44487, CVE-2023-4863, CVE-2013-3900. Full CVE list available in the Endpoint Vulnerability Audit.");
-  }
-
-  // ── SLIDE 9: VULN ROADMAP ────────────────────────────────────────────────
-  if (vuln) {
-    const s = addS();
-    addChrome(s, pres, "08", "ROADMAP", GREEN);
-    addTitle(s, "Vulnerability roadmap", "Next 90 days");
-
-    const drawRow = (yPos, days, color, title, body) => {
-      s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:yPos, w:9, h:0.85, fill:{ color:BG_MID }, line:{ color:BG_MID } });
-      s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:yPos, w:0.08, h:0.85, fill:{ color }, line:{ color } });
-      s.addShape(pres.shapes.OVAL, { x:0.78, y:yPos+0.13, w:0.6, h:0.6, fill:{ color }, line:{ color } });
-      s.addText(days, { x:0.78, y:yPos+0.13, w:0.6, h:0.6, fontSize:12, bold:true, color:WHITE, fontFace:"Calibri", align:"center", valign:"middle", margin:0 });
-      s.addText(title, { x:1.55, y:yPos+0.1, w:7.7, h:0.32, fontSize:13, bold:true, color:WHITE, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
-      s.addText(body, { x:1.55, y:yPos+0.42, w:7.7, h:0.4, fontSize:10, color:LIGHT, fontFace:"Calibri", align:"left", valign:"top", margin:0 });
-    };
-
-    drawRow(2.05, "30d", RED,   "Resolve 5 active threats on the domain controller", "Scheduled maintenance window applies all outstanding critical Windows updates. Targeting completion by mid-November.");
-    drawRow(3.0,  "60d", AMBER, "Restore visibility on 8 unreachable endpoints",       "Reach out to remote staff, reinstall the agent on offline machines, confirm every device is reporting before the next scan cycle.");
-    drawRow(3.95, "90d", BLUE,  "Address remaining known issues across the fleet",      "Roll out WinVerifyTrust patches on affected endpoints. Refresh browser updates on shared boardroom devices.");
-
-    s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:4.95, w:9, h:0.55, fill:{ color:BG_MID }, line:{ color:GREEN, width:1 } });
-    s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:4.95, w:0.08, h:0.55, fill:{ color:GREEN }, line:{ color:GREEN } });
-    s.addText("Continuous monitoring stays on", { x:0.78, y:5.0, w:4, h:0.22, fontSize:11, bold:true, color:GREEN, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
-    s.addText("Your environment is scanned weekly. New issues are surfaced the day they are published, prioritized by severity, and built into your next service window.", { x:0.78, y:5.22, w:8.6, h:0.28, fontSize:9, color:LIGHT, fontFace:"Calibri", align:"left", valign:"top", margin:0 });
-  }
-
-  // ── SLIDE 10: COMPLIANCE & BENCHMARKS ───────────────────────────────────
+  // ── SLIDE 7: VULNERABILITY POSTURE ───────────────────────────────────────
+  // Single slide built from the Risk Report's Vulnerability Summary section.
+  // The full per-CVE detail used to come from a separate Endpoint Vulnerability
+  // Audit PDF — Cavelo doesn't expose that as a separate export, so we
+  // surface the headline vuln metrics they DO include in the Risk Report.
   {
     const s = addS();
-    addChrome(s, pres, "09", "COMPLIANCE", GREEN);
+    addChrome(s, pres, "06", "VULNERABILITY", GREEN);
+    addTitle(s, "Vulnerability posture", "Endpoint and network exposure summary from the Risk Report");
+
+    addStatCard(s, pres, {
+      x:0.5, y:2.05, w:2.95, h:1.85,
+      accentColor: accentForCat(risk.vulnRiskCat),
+      label: "ENDPOINT VULN RISK",
+      value: fmtScore(risk.vulnRisk),
+      sublabel: risk.vulnRiskCat || "—",
+      valueSize: 56,
+    });
+    addStatCard(s, pres, {
+      x:3.55, y:2.05, w:2.95, h:1.85,
+      accentColor: RED,
+      label: "MAX CVSS THIS QUARTER",
+      value: fmtScore(risk.maxCVSS, 1),
+      sublabel: "Severity of the worst known CVE",
+      valueSize: 56,
+    });
+    addStatCard(s, pres, {
+      x:6.6, y:2.05, w:2.85, h:1.85,
+      accentColor: AMBER,
+      label: "MAX EPSS",
+      value: risk.maxEPSS != null ? risk.maxEPSS.toFixed(3) : "—",
+      sublabel: "Likelihood of exploitation in next 30d",
+      valueSize: 56,
+    });
+
+    // Network vuln callout — Cavelo separates "endpoint" from "network"
+    // vulnerability scoring. Highlight the network result so the contrast
+    // with endpoint risk is visible at a glance.
+    s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:4.1, w:4.5, h:0.95, fill:{ color:BG_MID }, line:{ color:accentForCat(risk.networkVulnRiskCat), width:1 } });
+    s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:4.1, w:0.08, h:0.95, fill:{ color:accentForCat(risk.networkVulnRiskCat) }, line:{ color:accentForCat(risk.networkVulnRiskCat) } });
+    s.addText("Network vulnerability risk", { x:0.75, y:4.18, w:3, h:0.3, fontSize:12, bold:true, color:accentForCat(risk.networkVulnRiskCat), fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
+    s.addText(risk.networkVulnRiskCat || "Not detected", { x:0.75, y:4.45, w:2.8, h:0.28, fontSize:10, color:LIGHT, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
+    s.addText(fmtScore(risk.networkVulnRisk), { x:3.2, y:4.2, w:1.7, h:0.4, fontSize:24, bold:true, color:WHITE, fontFace:"Calibri", align:"right", valign:"middle", margin:0 });
+    s.addText("perimeter score", { x:3.2, y:4.6, w:1.7, h:0.3, fontSize:9, color:MUTED, fontFace:"Calibri", align:"right", valign:"middle", margin:0 });
+
+    // What it means callout — narrative context for the numbers above.
+    s.addShape(pres.shapes.RECTANGLE, { x:5.2, y:4.1, w:4.3, h:0.95, fill:{ color:BG_MID }, line:{ color:GREEN, width:1 } });
+    s.addShape(pres.shapes.RECTANGLE, { x:5.2, y:4.1, w:0.08, h:0.95, fill:{ color:GREEN }, line:{ color:GREEN } });
+    s.addText("What this means", { x:5.45, y:4.18, w:4, h:0.3, fontSize:12, bold:true, color:GREEN, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
+    s.addText("Max CVSS reflects the most severe known vulnerability in your environment; max EPSS estimates how likely it is to be exploited in the next 30 days. We patch by priority of both.", { x:5.45, y:4.45, w:3.95, h:0.55, fontSize:9, color:LIGHT, fontFace:"Calibri", align:"left", valign:"top", margin:0 });
+
+    addFootnote(s, "CVSS = Common Vulnerability Scoring System. EPSS = Exploit Prediction Scoring System. Source: Cavelo Risk Report.");
+  }
+
+  // ── SLIDE 8: COMPLIANCE & BENCHMARKS ────────────────────────────────────
+  {
+    const s = addS();
+    addChrome(s, pres, "07", "COMPLIANCE", GREEN);
     addTitle(s, "CIS benchmark compliance", "Configuration hardening across your Windows fleet");
 
     const totalTests = risk.testsPassed + risk.testsFailed;
@@ -683,32 +601,84 @@ async function buildDeck({ risk, vuln, prospectName, mspName, mspUrl, primaryCol
       : "CIS = Center for Internet Security benchmarks. Source: Cavelo Data Risk Report.");
   }
 
-  // ── SLIDE 11: VISIBILITY GAPS ────────────────────────────────────────────
+  // ── SLIDE 9: VISIBILITY GAPS ─────────────────────────────────────────────
+  // Three cards highlighting coverage and exposure gaps from the Risk
+  // Report. Outlier-directories and noncompliant-hosts come straight from
+  // the parser; the sublabels rotate based on whether their counterpart
+  // metric is also present so the slide stays informative even when one
+  // value is missing.
   {
     const s = addS();
-    addChrome(s, pres, "10", "VISIBILITY", GREEN);
-    addTitle(s, "Where we don't have visibility", "Combined visibility gaps across all scan types");
+    addChrome(s, pres, "08", "VISIBILITY", GREEN);
+    addTitle(s, "Where we don't have visibility", "Coverage gaps and outlier exposure");
 
-    addStatCard(s, pres, { x:0.5, y:2.1, w:2.95, h:1.55, accentColor:AMBER, label:"VULN SCAN GAP", value:vuln ? `${vuln.failedHosts} of ${vuln.totalHosts}` : "—", sublabel:"Endpoints failed to scan", valueSize:28 });
-    addStatCard(s, pres, { x:3.55, y:2.1, w:2.95, h:1.55, accentColor:AMBER, label:"PII SCAN GAP", value:"26+", sublabel:"Hosts not in PII scans", valueSize:32 });
-    addStatCard(s, pres, { x:6.6, y:2.1, w:2.85, h:1.55, accentColor:AMBER, label:"BENCHMARK GAP", value:"10+", sublabel:"Hosts not in CIS scans", valueSize:32 });
+    addStatCard(s, pres, {
+      x:0.5, y:2.1, w:2.95, h:1.55,
+      accentColor: accentForCat(risk.permissionRiskCat),
+      label: "OUTLIER DIRECTORIES",
+      value: fmt(risk.outlierDirs),
+      sublabel: "Permission anomalies vs parent",
+      valueSize: 32,
+    });
+    addStatCard(s, pres, {
+      x:3.55, y:2.1, w:2.95, h:1.55,
+      accentColor: AMBER,
+      label: "NONCOMPLIANT HOSTS",
+      value: fmt(risk.noncompliantHosts),
+      sublabel: "Software policy gaps",
+      valueSize: 32,
+    });
+    addStatCard(s, pres, {
+      x:6.6, y:2.1, w:2.85, h:1.55,
+      accentColor: AMBER,
+      label: "MISSING SOFTWARE",
+      value: fmt(risk.missingSoftware),
+      sublabel: risk.unapprovedSoftware != null
+        ? `${fmt(risk.unapprovedSoftware)} unapproved · ${fmt(risk.mandatoryApps)} mandatory`
+        : "Hosts missing required apps",
+      valueSize: 32,
+    });
 
     s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:3.85, w:9, h:1.35, fill:{ color:BG_MID }, line:{ color:AMBER, width:1 } });
     s.addShape(pres.shapes.RECTANGLE, { x:0.5, y:3.85, w:0.08, h:1.35, fill:{ color:AMBER }, line:{ color:AMBER } });
     s.addText("What this means for you", { x:0.75, y:3.95, w:8.6, h:0.3, fontSize:13, bold:true, color:AMBER, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
-    s.addText("Endpoints we cannot scan are endpoints we cannot protect. Devices missing from PII scans could be holding sensitive data we have no visibility into. Closing these gaps is the single highest-leverage action this quarter.", { x:0.75, y:4.3, w:8.6, h:0.85, fontSize:11, color:LIGHT, fontFace:"Calibri", align:"left", valign:"top", margin:0 });
+    s.addText("Outlier directories are permission anomalies that bypass your normal access policy — sensitive data could be reachable by accounts that shouldn't see it. Noncompliant hosts are endpoints running software outside your approved baseline. Both are highest-leverage closes for this quarter.", { x:0.75, y:4.3, w:8.6, h:0.85, fontSize:11, color:LIGHT, fontFace:"Calibri", align:"left", valign:"top", margin:0 });
   }
 
-  // ── SLIDE 12: Q1 PRIORITIES ──────────────────────────────────────────────
+  // ── SLIDE 10: NEXT-QUARTER PRIORITIES ────────────────────────────────────
+  // Three commitments synthesized from the highest-severity items in the
+  // Risk Report. Body text references real parsed values where possible
+  // (CIS test fail count, outlier dir count, vuln risk category).
   {
     const s = addS();
-    addChrome(s, pres, "11", "NEXT QUARTER", GREEN);
-    addTitle(s, "Q1 2025 priorities", "Three commitments for the next 90 days");
+    addChrome(s, pres, "09", "NEXT QUARTER", GREEN);
+    addTitle(s, `${period.nextQuarter} priorities`, "Three commitments for the next 90 days");
 
     const priorities = [
-      { num:"01", title:"Close the visibility gap", body:`Restore agent connectivity on ${vuln ? vuln.failedHosts : 8} unreachable endpoints. Onboard the 26+ hosts currently outside PII scans. Goal: 100% coverage by end of Q1.`, color:RED },
-      { num:"02", title:"Reduce active threats to zero", body:`Patch all ${vuln ? vuln.exploitable : 5} currently exploitable vulnerabilities, with priority on the domain controller. Apply outstanding critical Windows updates in scheduled maintenance windows.`, color:AMBER },
-      { num:"03", title:"Tighten data exposure", body:"Remediate top 5 anonymous share links. Restrict outlier permissions on highest-cost OneDrive resources. Begin CIS benchmark hardening starting with Network Protection group.", color:BLUE },
+      {
+        num: "01",
+        title: "Reduce vulnerability exposure",
+        body: risk.maxCVSS != null
+          ? `Address the highest-severity issues from this quarter's scan (max CVSS ${fmtScore(risk.maxCVSS, 1)}, EPSS ${risk.maxEPSS != null ? risk.maxEPSS.toFixed(3) : "—"}). Apply outstanding critical Windows updates in scheduled maintenance windows.`
+          : "Address the highest-severity issues from this quarter's scan. Apply outstanding critical Windows updates in scheduled maintenance windows.",
+        color: RED,
+      },
+      {
+        num: "02",
+        title: "Tighten permission exposure",
+        body: risk.outlierDirs != null
+          ? `Remediate top ${Math.min(risk.outlierDirs, 50)}+ outlier directories — permission anomalies that bypass your normal access policy. Restrict anonymous share links on highest-cost resources.`
+          : "Remediate the highest-cost outlier directories. Restrict anonymous share links on top-exposure resources.",
+        color: AMBER,
+      },
+      {
+        num: "03",
+        title: "Harden CIS benchmark posture",
+        body: (risk.testsFailed != null && risk.testsPassed != null)
+          ? `Close ${fmt(risk.testsFailed)} failed tests of ${fmt(risk.testsPassed + risk.testsFailed)}. Begin with the Network Protection group on the highest-risk hosts; iterate weekly with the same scan cadence.`
+          : "Close failed CIS benchmark tests starting with the Network Protection group on highest-risk hosts.",
+        color: BLUE,
+      },
     ];
     priorities.forEach((p, i) => {
       const yPos = 2.1 + i * 0.95;
@@ -760,13 +730,9 @@ exports.handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ error: "Data Risk Report PDF is required." }) };
     }
 
-    // Extract text from PDFs (async — pdf-parse handles compressed streams)
+    // Extract text from PDF (pdf-parse handles compressed streams).
     const riskText = await extractPDFText(files.riskPdf.buffer);
-    const vulnText = files.vulnPdf ? await extractPDFText(files.vulnPdf.buffer) : null;
-
-    // Parse data
     const risk = parseRiskReport(riskText);
-    const vuln = vulnText ? parseVulnAudit(vulnText) : null;
 
     // Logo data URI
     let logoData = logoDataUri || null;
@@ -776,7 +742,7 @@ exports.handler = async (event) => {
 
     // Build deck
     const pptxBuffer = await buildDeck({
-      risk, vuln,
+      risk,
       prospectName: prospectName || "Client",
       mspName:      mspName     || "Your MSP",
       mspUrl:       mspUrl      || "yourmsp.com",
