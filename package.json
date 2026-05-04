@@ -1,0 +1,12 @@
+{
+  "name": "cavelo-qbr-builder",
+  "version": "1.0.0",
+  "description": "Cavelo QBR Deck Builder — two PDFs in, one PowerPoint out",
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "busboy": "^1.6.0",
+    "pptxgenjs": "^4.0.1"
+  }
+}

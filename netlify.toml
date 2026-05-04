@@ -1,0 +1,23 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/auth"
+  to   = "/.netlify/functions/auth"
+  status = 200
+
+[[redirects]]
+  from = "/api/brand/save"
+  to   = "/.netlify/functions/brand-save"
+  status = 200
+
+[[redirects]]
+  from = "/api/brand/load"
+  to   = "/.netlify/functions/brand-load"
+  status = 200
+
+[[redirects]]
+  from = "/api/generate"
+  to   = "/.netlify/functions/generate"
+  status = 200

@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QBR Deck Builder — Cavelo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #1E2535;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 18px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #2E3D56;
+      flex-shrink: 0;
+    }
+    .header-title { font-size: 18px; font-weight: 700; }
+    .header-title span { color: #3DBB8F; }
+    .badge {
+      background: #253044;
+      border: 1px solid #2E3D56;
+      color: #8892A4;
+      font-size: 11px;
+      padding: 6px 14px;
+      border-radius: 20px;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 32px 64px;
+    }
+
+    .hero { text-align: center; margin-bottom: 40px; }
+    .hero h1 { font-size: 30px; font-weight: 700; margin-bottom: 10px; }
+    .hero h1 span { color: #3DBB8F; }
+    .hero p { color: #8892A4; font-size: 14px; max-width: 520px; line-height: 1.6; margin: 0 auto; }
+
+    .screen { display: none; width: 100%; max-width: 1040px; }
+    .screen.active { display: block; }
+    #auth-screen { max-width: 420px; }
+
+    .card {
+      background: #253044;
+      border: 1px solid #2E3D56;
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .card-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: #3DBB8F;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: #8892A4;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    input[type=text], input[type=password], input[type=url],
+    input[type=email], input[type=tel] {
+      width: 100%;
+      background: #1E2535;
+      border: 1px solid #2E3D56;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 13px;
+      padding: 10px 13px;
+      outline: none;
+      transition: border-color .2s;
+      margin-bottom: 12px;
+    }
+    input:focus { border-color: #3DBB8F; }
+    input::placeholder { color: #4A5568; }
+
+    /* SELECT */
+    select {
+      width: 100%;
+      background: #1E2535;
+      border: 1px solid #2E3D56;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 13px;
+      padding: 10px 13px;
+      outline: none;
+      transition: border-color .2s;
+      margin-bottom: 12px;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238892A4' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+    }
+    select:focus { border-color: #3DBB8F; }
+    select option { background: #1E2535; }
+
+    /* DROP ZONE */
+    .drop-zone {
+      border: 2px dashed #2E3D56;
+      border-radius: 10px;
+      padding: 20px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+      position: relative;
+      min-height: 110px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+    .drop-zone:hover, .drop-zone.over { border-color: #3DBB8F; background: rgba(61,187,143,.05); }
+    .drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .drop-icon { font-size: 22px; margin-bottom: 6px; }
+    .drop-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+    .drop-sub { font-size: 11px; color: #8892A4; }
+    .drop-zone.ready { border-color: #3DBB8F; background: rgba(61,187,143,.08); }
+    .file-badge { font-size: 12px; font-weight: 600; color: #3DBB8F; margin-top: 5px; }
+
+    /* OPTIONAL ZONE */
+    .drop-zone-optional {
+      border-style: dashed;
+      opacity: 0.7;
+    }
+    .optional-label {
+      font-size: 10px;
+      color: #4A5568;
+      font-weight: 600;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    /* LOGO DROP ZONE */
+    .logo-drop {
+      border: 2px dashed #2E3D56;
+      border-radius: 8px;
+      padding: 14px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+      position: relative;
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .logo-drop:hover, .logo-drop.over { border-color: #3DBB8F; background: rgba(61,187,143,.05); }
+    .logo-drop input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .logo-drop.ready { border-color: #3DBB8F; background: rgba(61,187,143,.06); }
+    .logo-preview { max-height: 40px; max-width: 140px; object-fit: contain; border-radius: 4px; }
+    .logo-placeholder { font-size: 11px; color: #8892A4; }
+
+    /* BRAND BLOCKS */
+    .brand-setup-prompt {
+      display: none;
+      background: linear-gradient(135deg, rgba(245,166,35,.18) 0%, rgba(245,166,35,.06) 100%);
+      border: 2px solid #F5A623;
+      border-radius: 12px;
+      padding: 18px 24px;
+      margin-bottom: 20px;
+      align-items: center;
+      gap: 16px;
+      cursor: pointer;
+      transition: all .2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .brand-setup-prompt::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(245,166,35,.07), transparent);
+      animation: shimmer 2.2s infinite;
+    }
+    @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+    .brand-setup-prompt:hover { background: linear-gradient(135deg, rgba(245,166,35,.26) 0%, rgba(245,166,35,.1) 100%); border-color: #FFBE4A; }
+    .brand-setup-prompt.on { display: flex; }
+    .brand-setup-icon { font-size: 28px; flex-shrink: 0; animation: pulse-icon 1.8s ease-in-out infinite; }
+    @keyframes pulse-icon { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+    .brand-setup-text-group { flex: 1; }
+    .brand-setup-title { font-size: 15px; font-weight: 700; color: #F5A623; margin-bottom: 3px; }
+    .brand-setup-sub { font-size: 12px; color: #C8883A; }
+    .brand-setup-cta {
+      background: #F5A623; color: #1E2535; font-size: 13px; font-weight: 700;
+      border: none; border-radius: 8px; padding: 10px 20px; cursor: pointer;
+      flex-shrink: 0; transition: all .2s; white-space: nowrap;
+    }
+    .brand-setup-cta:hover { background: #FFBE4A; transform: translateY(-1px); }
+
+    .brand-preview-strip {
+      display: none;
+      align-items: center;
+      gap: 14px;
+      background: linear-gradient(135deg, rgba(61,187,143,.13) 0%, rgba(61,187,143,.05) 100%);
+      border: 1.5px solid rgba(61,187,143,.4);
+      border-radius: 12px;
+      padding: 14px 20px;
+      margin-bottom: 20px;
+    }
+    .brand-preview-strip.on { display: flex; }
+    .brand-preview-logo { max-height: 36px; max-width: 90px; object-fit: contain; flex-shrink: 0; }
+    .brand-preview-logo-placeholder {
+      width: 36px; height: 36px; border-radius: 8px; background: #2E3D56;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .brand-preview-divider { width: 1px; height: 32px; background: rgba(61,187,143,.25); flex-shrink: 0; }
+    .brand-preview-info { flex: 1; min-width: 0; }
+    .brand-preview-name { font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .brand-preview-url { font-size: 11px; color: #3DBB8F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .brand-preview-status { font-size: 11px; font-weight: 600; color: #3DBB8F; background: rgba(61,187,143,.12); border: 1px solid rgba(61,187,143,.25); border-radius: 20px; padding: 3px 10px; flex-shrink: 0; }
+    .brand-preview-edit { font-size: 12px; font-weight: 600; color: #fff; background: rgba(61,187,143,.2); border: 1px solid rgba(61,187,143,.4); border-radius: 7px; padding: 7px 16px; cursor: pointer; flex-shrink: 0; transition: all .15s; }
+    .brand-preview-edit:hover { background: rgba(61,187,143,.35); border-color: #3DBB8F; }
+
+    .brand-card {
+      background: #253044; border: 1px solid #2E3D56; border-radius: 12px;
+      padding: 0; margin-bottom: 20px; display: none; overflow: hidden;
+    }
+    .brand-card.open { display: block; }
+    .brand-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 24px; border-bottom: 1px solid #2E3D56;
+      cursor: pointer; user-select: none; background: rgba(61,187,143,.04);
+    }
+    .brand-card-header:hover { background: rgba(61,187,143,.08); }
+    .brand-card-title { font-size: 13px; font-weight: 700; color: #3DBB8F; letter-spacing: .5px; }
+    .brand-card-close { font-size: 18px; color: #8892A4; line-height: 1; }
+    .brand-card-body { padding: 24px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
+    .brand-col-label { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; color: #3DBB8F; text-transform: uppercase; margin-bottom: 12px; }
+    .brand-card-footer { padding: 16px 24px; border-top: 1px solid #2E3D56; display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,.1); }
+    .brand-section-label { font-size: 10px; font-weight: 600; letter-spacing: 1px; color: #4A5568; text-transform: uppercase; margin-bottom: 8px; margin-top: 14px; }
+    .brand-section-label:first-child { margin-top: 0; }
+
+    /* PERSONA SELECTOR */
+    .persona-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    /* LAYOUT ROWS */
+    .row { display: flex; gap: 16px; margin-bottom: 16px; }
+    .row .card { flex: 1; }
+
+    /* BUTTONS */
+    .btn { width: 100%; padding: 13px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all .2s; }
+    .btn-green { background: #3DBB8F; color: #fff; }
+    .btn-green:hover { background: #2DA87C; }
+    .btn-green:disabled { background: #2E3D56; color: #4A5568; cursor: not-allowed; }
+    .btn-outline { background: transparent; color: #3DBB8F; border: 1px solid #3DBB8F; }
+    .btn-outline:hover { background: rgba(61,187,143,.08); }
+    .btn-sm { padding: 8px 14px; font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer; border: none; transition: all .2s; width: auto; }
+    .btn-sm-green { background: #3DBB8F; color: #fff; }
+    .btn-sm-green:hover { background: #2DA87C; }
+    .btn-sm-ghost { background: transparent; color: #8892A4; border: 1px solid #2E3D56; }
+    .btn-sm-ghost:hover { border-color: #8892A4; color: #fff; }
+
+    /* COLOR INPUT */
+    .color-input-wrap { display: flex; align-items: center; gap: 8px; background: #1E2535; border: 1px solid #2E3D56; border-radius: 8px; padding: 6px 10px; transition: border-color .2s; margin-bottom: 0; }
+    .color-input-wrap:focus-within { border-color: #3DBB8F; }
+    input[type=color] { width: 28px; height: 28px; border: none; background: none; cursor: pointer; border-radius: 4px; padding: 0; flex-shrink: 0; }
+    .color-hex { flex: 1; background: none; border: none; color: #fff; font-size: 13px; outline: none; padding: 0; margin: 0; font-family: monospace; }
+
+    /* ERR */
+    .err { background: rgba(232,71,63,.1); border: 1px solid rgba(232,71,63,.3); color: #E8473F; border-radius: 8px; padding: 11px 14px; font-size: 13px; margin-bottom: 12px; display: none; }
+    .err.on { display: block; }
+
+    /* TOAST */
+    .toast { position: fixed; bottom: 28px; right: 28px; background: #253044; border: 1px solid rgba(61,187,143,.35); color: #3DBB8F; border-radius: 10px; padding: 12px 20px; font-size: 13px; font-weight: 600; opacity: 0; transform: translateY(8px); transition: all .25s; pointer-events: none; z-index: 100; }
+    .toast.on { opacity: 1; transform: translateY(0); }
+
+    /* LOADING */
+    .loading-wrap { text-align: center; padding: 70px 0; }
+    .spin { width: 48px; height: 48px; border: 3px solid #2E3D56; border-top-color: #3DBB8F; border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 20px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-title { font-size: 20px; font-weight: 600; margin-bottom: 20px; }
+    .lstep { font-size: 14px; color: #8892A4; line-height: 2.4; opacity: .4; transition: opacity .3s; }
+    .lstep.active { opacity: 1; color: #3DBB8F; }
+    .lstep.done { opacity: .6; color: #3DBB8F; }
+
+    /* SUCCESS */
+    .success-wrap { text-align: center; padding: 50px 0; max-width: 500px; margin: 0 auto; }
+    .sicon { font-size: 52px; margin-bottom: 16px; }
+    .stitle { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+    .ssub { color: #8892A4; font-size: 14px; margin-bottom: 28px; }
+    .notice { background: rgba(61,187,143,.08); border: 1px solid rgba(61,187,143,.2); border-radius: 8px; padding: 14px 18px; font-size: 13px; color: #3DBB8F; margin-bottom: 24px; text-align: left; line-height: 1.6; }
+
+    footer { padding: 18px; color: #4A5568; font-size: 11px; text-align: center; border-top: 1px solid #2E3D56; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-title">QBR <span>Deck Builder</span></div>
+  <div class="badge">🔒 Zero data retention</div>
+</header>
+
+<main>
+  <div class="hero">
+    <h1>Two Reports → <span>One QBR Deck</span></h1>
+    <p>Upload a Cavelo Data Risk Report and Endpoint Vulnerability Audit. Get a client-ready PowerPoint in seconds.</p>
+  </div>
+
+  <!-- AUTH -->
+  <div id="auth-screen" class="screen active">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-label">Community Access</div>
+      <label>Access code</label>
+      <input type="password" id="access-code" placeholder="Enter your access code" autocomplete="off">
+      <div class="err" id="auth-err">Incorrect code. Try again.</div>
+    </div>
+    <button class="btn btn-green" onclick="submitAuth()">Continue →</button>
+  </div>
+
+  <!-- MAIN FORM -->
+  <div id="main-screen" class="screen">
+
+    <!-- Brand first-time prompt -->
+    <div class="brand-setup-prompt" id="brand-setup-prompt" onclick="openBrandPanel()">
+      <div class="brand-setup-icon">🎨</div>
+      <div class="brand-setup-text-group">
+        <div class="brand-setup-title">Set up your MSP brand first</div>
+        <div class="brand-setup-sub">Save once — your logo, colors & contact info auto-load every time</div>
+      </div>
+      <button class="brand-setup-cta" onclick="event.stopPropagation(); openBrandPanel()">Set Up Brand →</button>
+    </div>
+
+    <!-- Brand returning preview -->
+    <div class="brand-preview-strip" id="brand-preview-strip">
+      <div class="brand-preview-logo-placeholder" id="brand-preview-logo-wrap">🏢</div>
+      <div class="brand-preview-divider"></div>
+      <div class="brand-preview-info">
+        <div class="brand-preview-name" id="brand-preview-name">Your MSP</div>
+        <div class="brand-preview-url" id="brand-preview-url"></div>
+      </div>
+      <div class="brand-preview-status">✓ Brand loaded</div>
+      <button class="brand-preview-edit" onclick="openBrandPanel()">Edit Brand</button>
+    </div>
+
+    <!-- Brand editor panel -->
+    <div class="brand-card" id="brand-card">
+      <div class="brand-card-header" onclick="closeBrandPanel()">
+        <div class="brand-card-title">🎨 &nbsp;Your MSP Brand Profile</div>
+        <div class="brand-card-close">✕</div>
+      </div>
+      <div class="brand-card-body">
+        <div>
+          <div class="brand-col-label">Identity</div>
+          <label>MSP name</label>
+          <input type="text" id="msp-name" placeholder="Your MSP name">
+          <label>Website URL</label>
+          <input type="url" id="msp-url" placeholder="https://yourmsp.com">
+          <div class="brand-section-label">Logo</div>
+          <div class="logo-drop" id="logo-drop">
+            <input type="file" id="logo-input" accept="image/*" onchange="handleLogo(this.files[0])">
+            <img id="logo-preview" class="logo-preview" style="display:none">
+            <span class="logo-placeholder" id="logo-placeholder">🖼 Drop logo or click to browse</span>
+          </div>
+        </div>
+        <div>
+          <div class="brand-col-label">Brand Color</div>
+          <label>Primary color <span style="color:#4A5568;font-weight:400">(replaces Cavelo green)</span></label>
+          <div class="color-input-wrap">
+            <input type="color" id="primary-color-pick" value="#3DBB8F" oninput="syncColor()">
+            <input type="text" class="color-hex" id="primary-color-hex" value="#3DBB8F" maxlength="7" oninput="syncColorFromHex()" placeholder="#3DBB8F">
+          </div>
+          <div style="margin-top:12px">
+            <div style="font-size:11px;color:#4A5568;margin-bottom:8px">Quick picks</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <div onclick="setColor('#E8312A')" style="width:24px;height:24px;border-radius:50%;background:#E8312A;cursor:pointer" title="#E8312A"></div>
+              <div onclick="setColor('#0066CC')" style="width:24px;height:24px;border-radius:50%;background:#0066CC;cursor:pointer" title="#0066CC"></div>
+              <div onclick="setColor('#7B2FBE')" style="width:24px;height:24px;border-radius:50%;background:#7B2FBE;cursor:pointer" title="#7B2FBE"></div>
+              <div onclick="setColor('#F5A623')" style="width:24px;height:24px;border-radius:50%;background:#F5A623;cursor:pointer" title="#F5A623"></div>
+              <div onclick="setColor('#3DBB8F')" style="width:24px;height:24px;border-radius:50%;background:#3DBB8F;cursor:pointer" title="Cavelo green"></div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="brand-col-label">Contact Info</div>
+          <label>Your name</label>
+          <input type="text" id="contact-name" placeholder="Jane Smith">
+          <label>Email</label>
+          <input type="email" id="contact-email" placeholder="jane@yourmsp.com">
+          <label>Phone</label>
+          <input type="tel" id="contact-phone" placeholder="+1 (555) 000-0000">
+        </div>
+      </div>
+      <div class="brand-card-footer">
+        <button class="btn-sm btn-sm-green" onclick="saveBrand()">💾 Save Brand Profile</button>
+        <button class="btn-sm btn-sm-ghost" onclick="clearBrand()">Clear</button>
+      </div>
+    </div>
+
+    <!-- Row 1: PDFs -->
+    <div class="row">
+      <div class="card">
+        <div class="card-label">Step 1 — Data Risk Report PDF</div>
+        <div class="drop-zone" id="dz-risk">
+          <input type="file" id="risk-pdf-input" accept=".pdf" onchange="handleRiskPDF(this.files[0])">
+          <div class="drop-icon">📊</div>
+          <div class="drop-title" id="risk-drop-title">Drop Risk Report PDF</div>
+          <div class="drop-sub">Cavelo Data Risk Report export</div>
+          <div class="file-badge" id="risk-file-badge"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-label">Step 2 — Vulnerability Audit PDF <span style="color:#4A5568;font-size:10px;font-weight:400;margin-left:6px">optional</span></div>
+        <div class="drop-zone drop-zone-optional" id="dz-vuln">
+          <input type="file" id="vuln-pdf-input" accept=".pdf" onchange="handleVulnPDF(this.files[0])">
+          <div class="drop-icon">🛡</div>
+          <div class="drop-title" id="vuln-drop-title">Drop Vuln Audit PDF</div>
+          <div class="drop-sub">Cavelo Endpoint Vulnerability Audit</div>
+          <div class="file-badge" id="vuln-file-badge"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: Client + Persona -->
+    <div class="row">
+      <div class="card" style="flex: 0 0 260px">
+        <div class="card-label">Step 3 — Client Details</div>
+        <label>Client company name</label>
+        <input type="text" id="prospect-name" placeholder="Acme Corp" style="margin-bottom:0">
+      </div>
+      <div class="card" style="flex: 1">
+        <div class="card-label">Step 4 — Audience Profile</div>
+        <div class="persona-row">
+          <div>
+            <label>Company size</label>
+            <select id="client-size">
+              <option value="smb">SMB (1–100 employees)</option>
+              <option value="mid">Mid-market (101–500)</option>
+              <option value="enterprise">Enterprise (500+)</option>
+            </select>
+          </div>
+          <div>
+            <label>Technical literacy in the room</label>
+            <select id="literacy">
+              <option value="non_technical">Non-technical (owner / office manager)</option>
+              <option value="business">Business (ops / finance lead)</option>
+              <option value="tech_aware" selected>Tech-aware (IT manager / MSP-savvy)</option>
+              <option value="technical">Technical (sysadmin / CTO)</option>
+              <option value="deep_technical">Deep technical (security engineer)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="err" id="gen-err"></div>
+    <button class="btn btn-green" id="gen-btn" onclick="generate()" disabled>Generate QBR Deck →</button>
+  </div>
+
+  <!-- LOADING -->
+  <div id="loading-screen" class="screen">
+    <div class="loading-wrap">
+      <div class="spin"></div>
+      <div class="loading-title">Building your QBR deck…</div>
+      <div class="lstep" id="s1">📊 Reading Data Risk Report</div>
+      <div class="lstep" id="s2">🛡 Reading Vulnerability Audit</div>
+      <div class="lstep" id="s3">🎨 Matching persona &amp; literacy level</div>
+      <div class="lstep" id="s4">📐 Building slides</div>
+      <div class="lstep" id="s5">✅ Packaging PowerPoint</div>
+    </div>
+  </div>
+
+  <!-- SUCCESS -->
+  <div id="success-screen" class="screen">
+    <div class="success-wrap">
+      <div class="sicon">🎉</div>
+      <div class="stitle">Your QBR deck is ready</div>
+      <div class="ssub" id="s-filename"></div>
+      <div class="notice">🔒 <strong>Zero data retained.</strong> Both PDFs were processed entirely in memory and never written to disk or stored anywhere on our servers.</div>
+      <button class="btn btn-outline" onclick="reset()">Build another deck</button>
+    </div>
+  </div>
+
+</main>
+
+<footer>QBR Deck Builder &nbsp;·&nbsp; Powered by Cavelo &nbsp;·&nbsp; Zero data retention</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+  let riskPDF = null, vulnPDF = null, logoFile = null, code = "";
+
+  // ── DRAG & DROP ─────────────────────────────────────────────────────────
+
+  function setupDrop(dzId, handler) {
+    const dz = document.getElementById(dzId);
+    dz.addEventListener("dragover",  e => { e.preventDefault(); dz.classList.add("over"); });
+    dz.addEventListener("dragleave", () => dz.classList.remove("over"));
+    dz.addEventListener("drop", e => { e.preventDefault(); dz.classList.remove("over"); handler(e.dataTransfer.files[0]); });
+  }
+  setupDrop("dz-risk", handleRiskPDF);
+  setupDrop("dz-vuln", handleVulnPDF);
+
+  const ldz = document.getElementById("logo-drop");
+  ldz.addEventListener("dragover",  e => { e.preventDefault(); ldz.classList.add("over"); });
+  ldz.addEventListener("dragleave", () => ldz.classList.remove("over"));
+  ldz.addEventListener("drop", e => { e.preventDefault(); ldz.classList.remove("over"); handleLogo(e.dataTransfer.files[0]); });
+
+  function handleRiskPDF(f) {
+    if (!f || f.type !== "application/pdf") return;
+    riskPDF = f;
+    document.getElementById("dz-risk").classList.add("ready");
+    document.getElementById("risk-file-badge").textContent = "✓ " + f.name;
+    document.getElementById("risk-drop-title").textContent = "Risk Report ready";
+    checkReady();
+  }
+
+  function handleVulnPDF(f) {
+    if (!f || f.type !== "application/pdf") return;
+    vulnPDF = f;
+    document.getElementById("dz-vuln").classList.add("ready");
+    document.getElementById("vuln-file-badge").textContent = "✓ " + f.name;
+    document.getElementById("vuln-drop-title").textContent = "Vuln Audit ready";
+    checkReady();
+  }
+
+  function handleLogo(f) {
+    if (!f || !f.type.startsWith("image/")) return;
+    logoFile = f;
+    document.getElementById("logo-drop").classList.add("ready");
+    const reader = new FileReader();
+    reader.onload = e => {
+      const preview = document.getElementById("logo-preview");
+      preview.src = e.target.result;
+      preview.style.display = "block";
+      document.getElementById("logo-placeholder").style.display = "none";
+    };
+    reader.readAsDataURL(f);
+  }
+
+  // ── COLOR ────────────────────────────────────────────────────────────────
+  function syncColor() {
+    document.getElementById("primary-color-hex").value = document.getElementById("primary-color-pick").value.toUpperCase();
+  }
+  function syncColorFromHex() {
+    const hex = document.getElementById("primary-color-hex").value.trim();
+    if (/^#[0-9A-Fa-f]{6}$/.test(hex)) document.getElementById("primary-color-pick").value = hex;
+  }
+  function setColor(hex) {
+    document.getElementById("primary-color-pick").value = hex;
+    document.getElementById("primary-color-hex").value = hex.toUpperCase();
+  }
+
+  // ── INPUT WATCHERS ───────────────────────────────────────────────────────
+  ["prospect-name", "msp-url"].forEach(id =>
+    document.getElementById(id).addEventListener("input", checkReady)
+  );
+  document.getElementById("msp-url").addEventListener("blur", function() {
+    let v = this.value.trim();
+    if (v && !/^https?:\/\//i.test(v)) this.value = "https://" + v;
+  });
+
+  function checkReady() {
+    const name   = document.getElementById("prospect-name").value.trim();
+    const mspUrl = document.getElementById("msp-url").value.trim();
+    document.getElementById("gen-btn").disabled = !(riskPDF && name.length > 0 && mspUrl.length > 4);
+  }
+
+  // ── BRAND PANEL ──────────────────────────────────────────────────────────
+  function openBrandPanel() {
+    document.getElementById("brand-card").classList.add("open");
+    document.getElementById("brand-card").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  function closeBrandPanel() {
+    document.getElementById("brand-card").classList.remove("open");
+  }
+
+  // ── AUTH ─────────────────────────────────────────────────────────────────
+  document.getElementById("access-code").addEventListener("keydown", e => { if (e.key === "Enter") submitAuth(); });
+
+  function submitAuth() {
+    const c = document.getElementById("access-code").value.trim();
+    if (!c) return;
+    fetch("/api/auth", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({code:c}) })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) { code = c; show("main-screen"); loadBrandProfile(); }
+        else document.getElementById("auth-err").classList.add("on");
+      })
+      .catch(() => document.getElementById("auth-err").classList.add("on"));
+  }
+
+  // ── BRAND: LOAD ──────────────────────────────────────────────────────────
+  function loadBrandProfile() {
+    fetch("/api/brand/load", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({code}) })
+      .then(r => r.json())
+      .then(d => { if (d.success && d.profile) applyBrandProfile(d.profile); else showFirstTimePrompt(); })
+      .catch(() => showFirstTimePrompt());
+  }
+
+  function showFirstTimePrompt() {
+    document.getElementById("brand-setup-prompt").classList.add("on");
+  }
+
+  function applyBrandProfile(p) {
+    if (p.mspName)      document.getElementById("msp-name").value      = p.mspName;
+    if (p.mspUrl)       document.getElementById("msp-url").value       = p.mspUrl;
+    if (p.contactName)  document.getElementById("contact-name").value  = p.contactName;
+    if (p.contactEmail) document.getElementById("contact-email").value = p.contactEmail;
+    if (p.contactPhone) document.getElementById("contact-phone").value = p.contactPhone;
+    if (p.primaryColor) {
+      const hex = p.primaryColor.startsWith("#") ? p.primaryColor : "#" + p.primaryColor;
+      document.getElementById("primary-color-pick").value = hex;
+      document.getElementById("primary-color-hex").value  = hex.toUpperCase();
+    }
+    if (p.logoData) {
+      const preview = document.getElementById("logo-preview");
+      preview.src = p.logoData; preview.style.display = "block";
+      document.getElementById("logo-placeholder").style.display = "none";
+      document.getElementById("logo-drop").classList.add("ready");
+      document.getElementById("brand-preview-logo-wrap").innerHTML = `<img src="${p.logoData}" class="brand-preview-logo">`;
+    }
+    if (p.mspName) document.getElementById("brand-preview-name").textContent = p.mspName;
+    if (p.mspUrl)  document.getElementById("brand-preview-url").textContent  = p.mspUrl.replace(/^https?:\/\//,"");
+    document.getElementById("brand-preview-strip").classList.add("on");
+    document.getElementById("brand-setup-prompt").classList.remove("on");
+    document.getElementById("brand-card").classList.remove("open");
+    checkReady();
+  }
+
+  // ── BRAND: SAVE ──────────────────────────────────────────────────────────
+  async function saveBrand() {
+    const fd = new FormData();
+    fd.append("code",         code);
+    fd.append("mspName",      document.getElementById("msp-name").value.trim());
+    fd.append("mspUrl",       document.getElementById("msp-url").value.trim());
+    fd.append("primaryColor", document.getElementById("primary-color-hex").value.trim());
+    fd.append("contactName",  document.getElementById("contact-name").value.trim());
+    fd.append("contactEmail", document.getElementById("contact-email").value.trim());
+    fd.append("contactPhone", document.getElementById("contact-phone").value.trim());
+    if (logoFile) fd.append("logo", logoFile);
+    try {
+      const res = await fetch("/api/brand/save", { method:"POST", body:fd });
+      const d   = await res.json();
+      if (d.success) { applyBrandProfile(d.profile); showToast("✓ Brand profile saved"); }
+    } catch(e) { showToast("Could not save — please try again"); }
+  }
+
+  function clearBrand() {
+    ["msp-name","msp-url","contact-name","contact-email","contact-phone"].forEach(id => document.getElementById(id).value = "");
+    document.getElementById("primary-color-pick").value = "#3DBB8F";
+    document.getElementById("primary-color-hex").value  = "#3DBB8F";
+    const p = document.getElementById("logo-preview");
+    p.src = ""; p.style.display = "none";
+    document.getElementById("logo-placeholder").style.display = "";
+    document.getElementById("logo-drop").classList.remove("ready");
+    document.getElementById("brand-preview-strip").classList.remove("on");
+    document.getElementById("brand-setup-prompt").classList.add("on");
+    document.getElementById("brand-preview-logo-wrap").innerHTML = "🏢";
+    logoFile = null; checkReady();
+  }
+
+  // ── GENERATE ─────────────────────────────────────────────────────────────
+  async function generate() {
+    const prospectName = document.getElementById("prospect-name").value.trim();
+    const mspName      = document.getElementById("msp-name").value.trim() || "Your MSP";
+    const mspUrl       = document.getElementById("msp-url").value.trim();
+    const literacy     = document.getElementById("literacy").value;
+    const clientSize   = document.getElementById("client-size").value;
+    const errEl        = document.getElementById("gen-err");
+    errEl.classList.remove("on");
+    if (!riskPDF || !mspUrl) return;
+
+    show("loading-screen");
+    animateSteps();
+
+    const fd = new FormData();
+    fd.append("riskPdf",      riskPDF);
+    if (vulnPDF) fd.append("vulnPdf", vulnPDF);
+    fd.append("prospectName", prospectName);
+    fd.append("mspName",      mspName);
+    fd.append("mspUrl",       mspUrl);
+    fd.append("code",         code);
+    fd.append("primaryColor", document.getElementById("primary-color-hex").value.trim());
+    fd.append("literacy",     literacy);
+    fd.append("clientSize",   clientSize);
+    if (logoFile) fd.append("logo", logoFile);
+    else {
+      const previewSrc = document.getElementById("logo-preview").src;
+      if (previewSrc && previewSrc.startsWith("data:")) fd.append("logoDataUri", previewSrc);
+    }
+
+    try {
+      const res = await fetch("/api/generate", { method:"POST", body:fd });
+      if (!res.ok) {
+        const err = await res.json();
+        show("main-screen");
+        errEl.textContent = err.error || "Something went wrong.";
+        errEl.classList.add("on");
+        return;
+      }
+      const disp = res.headers.get("Content-Disposition") || "";
+      const m    = disp.match(/filename="([^"]+)"/);
+      const name = m ? m[1] : "QBR_Deck.pptx";
+      const blob = await res.blob();
+      const a    = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      document.getElementById("s-filename").textContent = name;
+      show("success-screen");
+    } catch(e) {
+      show("main-screen");
+      errEl.textContent = "Network error. Please try again.";
+      errEl.classList.add("on");
+    }
+  }
+
+  function animateSteps() {
+    const ids = ["s1","s2","s3","s4","s5"], delays = [400,2500,5000,7500,11000];
+    ids.forEach((id,i) => setTimeout(() => {
+      if (i > 0) document.getElementById(ids[i-1]).classList.replace("active","done");
+      document.getElementById(id).classList.add("active");
+    }, delays[i]));
+  }
+
+  function reset() {
+    riskPDF = null; vulnPDF = null;
+    ["risk-pdf-input","vuln-pdf-input","prospect-name"].forEach(id => document.getElementById(id).value = "");
+    document.getElementById("risk-file-badge").textContent = "";
+    document.getElementById("vuln-file-badge").textContent = "";
+    document.getElementById("risk-drop-title").textContent = "Drop Risk Report PDF";
+    document.getElementById("vuln-drop-title").textContent = "Drop Vuln Audit PDF";
+    document.getElementById("dz-risk").classList.remove("ready","over");
+    document.getElementById("dz-vuln").classList.remove("ready","over");
+    document.getElementById("gen-btn").disabled = true;
+    document.getElementById("gen-err").classList.remove("on");
+    ["s1","s2","s3","s4","s5"].forEach(id => document.getElementById(id).className = "lstep");
+    show("main-screen");
+  }
+
+  function show(id) {
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    document.getElementById(id).classList.add("active");
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("on");
+    setTimeout(() => t.classList.remove("on"), 2800);
+  }
+</script>
+</body>
+</html>
