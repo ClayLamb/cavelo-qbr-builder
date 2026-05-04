@@ -502,11 +502,8 @@ exports.handler = async (event) => {
 
   try {
     const { fields, files } = await parseFormData(event);
-    const { code, prospectName, mspName, mspUrl, primaryColor, literacy, clientSize, logoDataUri } = fields;
+    const { prospectName, mspName, mspUrl, primaryColor, literacy, clientSize, logoDataUri } = fields;
 
-    if (!code || code !== process.env.SITE_PASSWORD) {
-      return { statusCode: 401, body: JSON.stringify({ error: "Unauthorized" }) };
-    }
     if (!files.riskPdf) {
       return { statusCode: 400, body: JSON.stringify({ error: "Data Risk Report PDF is required." }) };
     }

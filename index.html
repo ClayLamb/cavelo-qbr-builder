@@ -323,19 +323,8 @@
     <p>Upload a Cavelo Data Risk Report and Endpoint Vulnerability Audit. Get a client-ready PowerPoint in seconds.</p>
   </div>
 
-  <!-- AUTH -->
-  <div id="auth-screen" class="screen active">
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-label">Community Access</div>
-      <label>Access code</label>
-      <input type="password" id="access-code" placeholder="Enter your access code" autocomplete="off">
-      <div class="err" id="auth-err">Incorrect code. Try again.</div>
-    </div>
-    <button class="btn btn-green" onclick="submitAuth()">Continue →</button>
-  </div>
-
   <!-- MAIN FORM -->
-  <div id="main-screen" class="screen">
+  <div id="main-screen" class="screen active">
 
     <!-- Brand first-time prompt -->
     <div class="brand-setup-prompt" id="brand-setup-prompt" onclick="openBrandPanel()">
@@ -503,7 +492,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  let riskPDF = null, vulnPDF = null, logoFile = null, code = "";
+  let riskPDF = null, vulnPDF = null, logoFile = null;
 
   // ── DRAG & DROP ─────────────────────────────────────────────────────────
 
@@ -590,24 +579,13 @@
     document.getElementById("brand-card").classList.remove("open");
   }
 
-  // ── AUTH ─────────────────────────────────────────────────────────────────
-  document.getElementById("access-code").addEventListener("keydown", e => { if (e.key === "Enter") submitAuth(); });
-
-  function submitAuth() {
-    const c = document.getElementById("access-code").value.trim();
-    if (!c) return;
-    fetch("/api/auth", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({code:c}) })
-      .then(r => r.json())
-      .then(d => {
-        if (d.success) { code = c; show("main-screen"); loadBrandProfile(); }
-        else document.getElementById("auth-err").classList.add("on");
-      })
-      .catch(() => document.getElementById("auth-err").classList.add("on"));
-  }
+  // ── INIT ─────────────────────────────────────────────────────────────────
+  // No auth gate — load brand profile immediately on first paint.
+  loadBrandProfile();
 
   // ── BRAND: LOAD ──────────────────────────────────────────────────────────
   function loadBrandProfile() {
-    fetch("/api/brand/load", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({code}) })
+    fetch("/api/brand/load", { method:"POST", headers:{"Content-Type":"application/json"}, body:"{}" })
       .then(r => r.json())
       .then(d => { if (d.success && d.profile) applyBrandProfile(d.profile); else showFirstTimePrompt(); })
       .catch(() => showFirstTimePrompt());
@@ -646,7 +624,6 @@
   // ── BRAND: SAVE ──────────────────────────────────────────────────────────
   async function saveBrand() {
     const fd = new FormData();
-    fd.append("code",         code);
     fd.append("mspName",      document.getElementById("msp-name").value.trim());
     fd.append("mspUrl",       document.getElementById("msp-url").value.trim());
     fd.append("primaryColor", document.getElementById("primary-color-hex").value.trim());
@@ -695,7 +672,6 @@
     fd.append("prospectName", prospectName);
     fd.append("mspName",      mspName);
     fd.append("mspUrl",       mspUrl);
-    fd.append("code",         code);
     fd.append("primaryColor", document.getElementById("primary-color-hex").value.trim());
     fd.append("literacy",     literacy);
     fd.append("clientSize",   clientSize);

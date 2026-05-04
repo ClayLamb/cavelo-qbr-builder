@@ -1,11 +1,17 @@
 // brand-save.js
-// Saves MSP brand profile in-memory (keyed by access code)
-// NOTE: In-memory only — resets on function cold start.
-// For persistence, swap brandStore for a Netlify Blob or KV store.
+// Saves a single global brand profile in-memory.
+// NOTE: In-memory only — resets on function cold start. For persistence,
+// swap brandStore for a Netlify Blob or KV store.
+//
+// Uses the same global._qbrBrandStore as brand-load.js so save/load can
+// see each other's writes (Netlify spawns each function in its own
+// module scope; module-local consts don't share).
 
 const busboy = require("busboy");
 
-const brandStore = {}; // { [code]: profileObject }
+if (!global._qbrBrandStore) global._qbrBrandStore = {};
+const brandStore = global._qbrBrandStore;
+const BRAND_KEY = "default";
 
 function parseBrandFormData(event) {
   return new Promise((resolve, reject) => {
@@ -39,18 +45,14 @@ exports.handler = async (event) => {
 
   try {
     const profile = await parseBrandFormData(event);
-    const { code, mspName, mspUrl, primaryColor, contactName, contactEmail, contactPhone, logoData } = profile;
+    const { mspName, mspUrl, primaryColor, contactName, contactEmail, contactPhone, logoData } = profile;
 
-    if (!code || code !== process.env.SITE_PASSWORD) {
-      return { statusCode: 401, body: JSON.stringify({ success: false, error: "Unauthorized" }) };
-    }
-
-    brandStore[code] = { mspName, mspUrl, primaryColor, contactName, contactEmail, contactPhone, logoData };
+    brandStore[BRAND_KEY] = { mspName, mspUrl, primaryColor, contactName, contactEmail, contactPhone, logoData };
 
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ success: true, profile: brandStore[code] }),
+      body: JSON.stringify({ success: true, profile: brandStore[BRAND_KEY] }),
     };
   } catch (e) {
     return { statusCode: 500, body: JSON.stringify({ success: false, error: e.message }) };
