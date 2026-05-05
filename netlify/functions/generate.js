@@ -128,28 +128,30 @@ function parseRiskReport(text) {
     // Tabular data we CAN extract — see parseTopAtRiskTable() below.
     topConnectors: parseTopAtRiskTable(text_, "Top at-risk Connectors"),
     topAgents:     parseTopAtRiskTable(text_, "Top at-risk Agents"),
+
+    // Per-section "Active Schedules / Policies / Whitelists" counts —
+    // proves that monitoring is configured. See parseMonitoring().
+    monitoring:    parseMonitoring(text_),
   };
 }
 
 // Cavelo's "Top at-risk X" tables in the PDF render with the source name
-// on one line and the score columns concatenated on the next line:
+// on one line and ALL the score columns concatenated on the next line:
 //
-//     Top at-risk Connectors
-//     SourceScoreData CostBenchmarkPermission
-//     Cavelo o365 Tenant
-//     3.94.00.03.5
-//     cavelodata google workspace
-//     2.22.0n/a3.0
-//     ...
+//     Top at-risk Agents
+//     SourceScoreData CostBenchmarkPermissionVulnerability
+//     LAPTOP-FEAIVATS
+//     4.44.04.91.04.9
 //
-// We capture the section between the heading and the next blank-line
-// break, then walk it as alternating name / score-row pairs. Returns
-// up to 10 rows of { name, score } sorted by score descending. The
-// first numeric token on each score row is the overall "Score" column.
+// We split on the next-line newline, capture every X.Y / n/a token
+// from the score row (each is one column), and return rows of
+//   { name, score, scores: [Score, DataCost, Benchmark, Permission, Vulnerability] }
+// `score` is a convenience alias for scores[0]. The dimension column
+// names depend on the table — Connectors omit the Vulnerability column,
+// Network Hosts only have Score + NetworkVuln.
 function parseTopAtRiskTable(text, heading) {
   const headIdx = text.indexOf(heading);
   if (headIdx < 0) return [];
-  // Section ends at the next "Top at-risk" or "Data Risk Report / PAGE"
   const tail = text.slice(headIdx + heading.length, headIdx + heading.length + 4000);
   const endIdx = Math.min(
     ...["Top at-risk", "Data Risk Report / PAGE", "Top 5 ", "Recommendations"]
@@ -157,26 +159,82 @@ function parseTopAtRiskTable(text, heading) {
   );
   const section = tail.slice(0, endIdx === Infinity ? tail.length : endIdx);
 
-  // Split on newlines, drop the column-header row + blank lines.
   const lines = section.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  // First line is the column-header concatenation ("SourceScoreData Cost...")
-  // — skip it. Every subsequent pair (name, score-row) is a record.
   const rows = [];
   for (let i = 1; i < lines.length - 1; i += 2) {
-    const name      = lines[i];
-    const scoreRow  = lines[i + 1];
-    // Score row starts with the overall "Score" column. Cavelo scores
-    // are always X.Y (e.g. "3.9", "4.4") concatenated with adjacent
-    // columns ("3.94.00.03.5" = 3.9 + 4.0 + 0.0 + 3.5). Match exactly
-    // one digit + decimal + one digit so we don't slurp the next column.
-    const m = scoreRow.match(/^(\d\.\d|n\/a)/i);
-    if (!m || /^\d/.test(name)) continue;
-    const score = m[1].toLowerCase() === "n/a" ? null : parseFloat(m[1]);
-    rows.push({ name, score });
+    const name     = lines[i];
+    const scoreRow = lines[i + 1];
+    if (!/^(\d\.\d|n\/a)/i.test(scoreRow) || /^\d/.test(name)) continue;
+    // Capture all X.Y / n/a tokens — each is one column from the table
+    const tokens = scoreRow.match(/(\d\.\d|n\/a)/gi) || [];
+    const scores = tokens.map(t => t.toLowerCase() === "n/a" ? null : parseFloat(t));
+    if (scores.length === 0) continue;
+    rows.push({ name, score: scores[0], scores });
   }
-  // Sort by score (nulls last) and cap at 10.
   rows.sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity));
   return rows.slice(0, 10);
+}
+
+// Each summary section in the Risk Report (Data Cost, Benchmark,
+// Vulnerability, Network Vulnerability) carries a small monitoring
+// footprint — counts of Active Schedules / Policies / Whitelists. The
+// PDF lays them out as "<count>\n<label>" inside their owning section.
+// Return per-section counts so we can render a "monitoring posture"
+// summary on its own slide.
+//
+// Each call is scoped to the named section so we don't accidentally
+// pick up the count from a neighbouring section's "Active Schedules"
+// entry (the labels repeat).
+function parseMonitoring(text) {
+  // Two pitfalls in the Risk Report layout:
+  //  1. The Table of Contents lists every section name at the top of
+  //     the PDF (e.g. "Benchmark Summary9" — name immediately followed
+  //     by the page number). indexOf returns that TOC offset.
+  //  2. "Vulnerability Summary" appears as a substring inside
+  //     "Network Vulnerability Summary".
+  // Find the first occurrence that's preceded by a non-letter (rules
+  // out the substring inside "Network Vulnerability Summary") AND not
+  // followed by a digit (rules out the TOC page-number entries).
+  const findRealSection = (label) => {
+    let pos = -1;
+    while ((pos = text.indexOf(label, pos + 1)) !== -1) {
+      const before = pos > 0 ? text[pos - 1] : "\n";
+      const after  = text[pos + label.length] || "";
+      if (/[a-z]/i.test(before)) continue;  // substring inside a longer name
+      if (/\d/.test(after))      continue;  // TOC entry "<Name><page#>"
+      return pos;
+    }
+    return -1;
+  };
+  const sectionSlice = (start, end) => {
+    const s = findRealSection(start);
+    if (s < 0) return "";
+    const e = end ? findRealSection(end) : -1;
+    return text.slice(s, e > s ? e : s + 4000);
+  };
+  const numberBefore = (section, label) => {
+    if (!section) return null;
+    const re = new RegExp("(\\d+)\\s*\\n?\\s*" + label + "(?:\\s|$)", "m");
+    const m = section.match(re);
+    return m ? parseInt(m[1], 10) : null;
+  };
+  const dc  = sectionSlice("Data Cost Summary",            "Benchmark Summary");
+  const bm  = sectionSlice("Benchmark Summary",            "Vulnerability Summary");
+  const vn  = sectionSlice("Vulnerability Summary",        "Network Vulnerability Summary");
+  const nv  = sectionSlice("Network Vulnerability Summary","Software Summary");
+  return {
+    dataCost: { schedules: numberBefore(dc, "Active Schedules"),
+                policies:  numberBefore(dc, "Active Policies") },
+    benchmark:{ schedules: numberBefore(bm, "Active Schedules"),
+                policies:  numberBefore(bm, "Active Policies"),
+                whitelists:numberBefore(bm, "Active Whitelists") },
+    vuln:     { schedules: numberBefore(vn, "Active Schedules"),
+                policies:  numberBefore(vn, "Active Policies"),
+                whitelists:numberBefore(vn, "Active Whitelists") },
+    networkVuln:{ schedules: numberBefore(nv, "Active Schedules"),
+                  policies:  numberBefore(nv, "Active Policies"),
+                  whitelists:numberBefore(nv, "Active Whitelists") },
+  };
 }
 
 // parseVulnAudit removed — Cavelo doesn't expose a separate Endpoint
@@ -624,6 +682,83 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
     });
   }
 
+  // ── SLIDE 5b: TOP HOSTS TO ADDRESS  (Intermediate / Advanced only) ───────
+  // Per-host risk breakdown from the Risk Report's "Top at-risk Agents"
+  // table. Each row shows the host's overall Risk Score plus its four
+  // sub-dimension scores (Data Cost / Benchmark / Permission / Vulnerability)
+  // so the audience can see WHERE each host's risk concentrates. Sub-cells
+  // are tinted by severity (>=4 red, >=3 amber, otherwise neutral).
+  // Beginner persona skips this — it's too dense for non-technical readers.
+  if ((literacy === "intermediate" || literacy === "advanced")
+      && Array.isArray(risk.topAgents) && risk.topAgents.length > 0) {
+    const s = addS();
+    addChrome(s, pres, "", "TOP HOSTS", GREEN);
+    addTitle(s, "Top hosts to address this quarter",
+      "Highest-risk endpoints from the Risk Report — sorted by overall score");
+
+    const top = risk.topAgents.slice(0, 6);
+    // Column geometry (slide width 10, padded to 9.0 usable from x=0.5)
+    const cols = [
+      { label: "HOST",        x: 0.50, w: 2.40, align: "left"  },
+      { label: "OVERALL",     x: 2.95, w: 1.20, align: "center" },
+      { label: "DATA COST",   x: 4.20, w: 1.30, align: "center" },
+      { label: "BENCHMARK",   x: 5.55, w: 1.30, align: "center" },
+      { label: "PERMISSION",  x: 6.90, w: 1.30, align: "center" },
+      { label: "VULN",        x: 8.25, w: 1.20, align: "center" },
+    ];
+
+    // Header row
+    const headerY = 2.05;
+    cols.forEach(c => {
+      s.addText(c.label, { x: c.x, y: headerY, w: c.w, h: 0.3,
+        fontSize: 9, bold: true, color: GREEN, fontFace: "Calibri",
+        align: c.align, valign: "middle", margin: 0, charSpacing: 1 });
+    });
+
+    // Data rows — alternating background so rows visually separate
+    const tintForScore = (sc) => {
+      if (sc == null) return MUTED;
+      if (sc >= 4)    return RED;
+      if (sc >= 3)    return AMBER;
+      return LIGHT;
+    };
+    const rowH = 0.42;
+    top.forEach((row, i) => {
+      const y = 2.45 + i * rowH;
+      // Subtle band on every other row for legibility
+      if (i % 2 === 0) {
+        s.addShape(pres.shapes.RECTANGLE, { x: 0.5, y, w: 9.0, h: rowH,
+          fill: { color: BG_MID }, line: { color: BG_MID } });
+      }
+      // Host name
+      s.addText(row.name, {
+        x: cols[0].x + 0.1, y, w: cols[0].w - 0.1, h: rowH,
+        fontSize: 11, bold: true, color: WHITE, fontFace: "Calibri",
+        align: "left", valign: "middle", margin: 0,
+      });
+      // Overall + 4 dimension scores. Cavelo agents table columns are:
+      //   scores[0] Score, [1] Data Cost, [2] Benchmark, [3] Permission, [4] Vulnerability
+      [
+        { col: 1, idx: 0, bold: true,  size: 14 },
+        { col: 2, idx: 1, bold: false, size: 12 },
+        { col: 3, idx: 2, bold: false, size: 12 },
+        { col: 4, idx: 3, bold: false, size: 12 },
+        { col: 5, idx: 4, bold: false, size: 12 },
+      ].forEach(({ col, idx, bold, size }) => {
+        const sc  = row.scores[idx];
+        const txt = sc == null ? "—" : sc.toFixed(1);
+        const c   = cols[col];
+        s.addText(txt, {
+          x: c.x, y, w: c.w, h: rowH,
+          fontSize: size, bold, color: tintForScore(sc), fontFace: "Calibri",
+          align: c.align, valign: "middle", margin: 0,
+        });
+      });
+    });
+
+    addFootnote(s, "Scores 0-5 per Cavelo's Risk Report. Red ≥ 4, amber ≥ 3. Source: Top at-risk Agents table.");
+  }
+
   // ── SLIDE 6: SOFTWARE COMPLIANCE ─────────────────────────────────────────
   {
     const s = addS();
@@ -697,6 +832,86 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
     s.addText("Max CVSS reflects the most severe known vulnerability in your environment; max EPSS estimates how likely it is to be exploited in the next 30 days. We patch by priority of both.", { x:5.45, y:4.45, w:3.95, h:0.55, fontSize:9, color:LIGHT, fontFace:"Calibri", align:"left", valign:"top", margin:0 });
 
     addFootnote(s, "CVSS = Common Vulnerability Scoring System. EPSS = Exploit Prediction Scoring System. Source: Cavelo Risk Report.");
+  }
+
+  // ── SLIDE 7b: CONTINUOUS MONITORING POSTURE  (Intermediate / Advanced) ──
+  // Validates that monitoring is actually configured. Pulled from each
+  // section's Active Schedules / Policies / Whitelists counts in the
+  // Risk Report. 2x2 grid of small cards. Beginner persona skips this —
+  // "active whitelists" is too jargon-y without context.
+  if ((literacy === "intermediate" || literacy === "advanced") && risk.monitoring) {
+    const m = risk.monitoring;
+    const allEmpty = [m.dataCost, m.benchmark, m.vuln, m.networkVuln]
+      .every(b => Object.values(b || {}).every(v => v == null));
+    if (!allEmpty) {
+      const s = addS();
+      addChrome(s, pres, "", "MONITORING", GREEN);
+      addTitle(s, "Continuous monitoring posture",
+        "What's running in your environment between QBRs");
+
+      const cards = [
+        { name: "DATA DISCOVERY",         block: m.dataCost,    accent: GREEN },
+        { name: "CIS BENCHMARKS",         block: m.benchmark,   accent: AMBER },
+        { name: "VULNERABILITY SCANS",    block: m.vuln,        accent: RED   },
+        { name: "NETWORK VULN SCANS",     block: m.networkVuln, accent: BLUE  },
+      ];
+
+      // 2x2 grid centered horizontally (cardW 4.45, gap 0.10)
+      const cardW = 4.45, cardH = 1.35, gap = 0.10;
+      const col = (i) => 0.5 + (i % 2) * (cardW + gap);
+      const row = (i) => 2.05 + Math.floor(i / 2) * (cardH + gap);
+
+      cards.forEach((c, i) => {
+        const x = col(i), y = row(i);
+        // Card background + accent left edge
+        s.addShape(pres.shapes.RECTANGLE, { x, y, w: cardW, h: cardH,
+          fill: { color: BG_MID }, line: { color: BG_MID } });
+        s.addShape(pres.shapes.RECTANGLE, { x, y, w: 0.08, h: cardH,
+          fill: { color: c.accent }, line: { color: c.accent } });
+        // Card label
+        s.addText(c.name, { x: x + 0.18, y: y + 0.12, w: cardW - 0.36, h: 0.28,
+          fontSize: 10, bold: true, color: c.accent, fontFace: "Calibri",
+          align: "left", valign: "middle", margin: 0, charSpacing: 1 });
+        // Three numeric tiles inside the card: schedules / policies / whitelists.
+        // dataCost only has schedules + policies (no whitelist tile).
+        const tiles = [
+          { label: "Schedules", value: c.block?.schedules },
+          { label: "Policies",  value: c.block?.policies  },
+          { label: "Whitelists",value: c.block?.whitelists },
+        ].filter(t => t.value != null);
+        if (tiles.length === 0) {
+          s.addText("Detail not available", {
+            x: x + 0.18, y: y + 0.45, w: cardW - 0.36, h: 0.4,
+            fontSize: 11, italic: true, color: MUTED, fontFace: "Calibri",
+            align: "left", valign: "middle", margin: 0,
+          });
+        } else {
+          const tileW = (cardW - 0.36) / tiles.length;
+          tiles.forEach((t, j) => {
+            const tx = x + 0.18 + j * tileW;
+            s.addText(String(t.value), {
+              x: tx, y: y + 0.45, w: tileW - 0.05, h: 0.42,
+              fontSize: 28, bold: true, color: WHITE, fontFace: "Calibri",
+              align: "left", valign: "middle", margin: 0,
+            });
+            s.addText(t.label, {
+              x: tx, y: y + 0.92, w: tileW - 0.05, h: 0.22,
+              fontSize: 9, color: MUTED, fontFace: "Calibri",
+              align: "left", valign: "middle", margin: 0,
+            });
+          });
+        }
+      });
+
+      // Bottom callout — explains the terms without jargon
+      s.addShape(pres.shapes.RECTANGLE, { x: 0.5, y: 4.85, w: 9.0, h: 0.45,
+        fill: { color: BG_MID }, line: { color: GREEN, width: 1 } });
+      s.addShape(pres.shapes.RECTANGLE, { x: 0.5, y: 4.85, w: 0.08, h: 0.45,
+        fill: { color: GREEN }, line: { color: GREEN } });
+      s.addText("Schedules run automatically against your environment. Policies are remediation rules. Whitelists carry approved exceptions.",
+        { x: 0.75, y: 4.88, w: 8.6, h: 0.4, fontSize: 10, color: LIGHT,
+          fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
+    }
   }
 
   // ── SLIDE 8: CIS BENCHMARKS ─────────────────────────────────────────────
