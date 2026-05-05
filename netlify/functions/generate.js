@@ -307,7 +307,7 @@ function periodLabels(date = new Date()) {
 
 // ─── DECK BUILDER ─────────────────────────────────────────────────────────────
 
-async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, primaryColor, literacy, clientSize, logoDataUri }) {
+async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, primaryColor, literacy, clientSize, compliance, logoDataUri }) {
   const GREEN  = primaryColor || "3DBB8F";
   const RED    = "EF4444";
   const AMBER  = "F59E0B";
@@ -724,19 +724,14 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
   }
 
   // ── SLIDE 9: COMPLIANCE EVIDENCE ─────────────────────────────────────────
-  // Maps Cavelo's continuous controls to the three frameworks MSPs are
-  // most often asked about (CMMC L1/L2, NIST CSF, SOC 2). Each card lists
-  // the specific controls Cavelo evidences and the exact metrics from
-  // THIS quarter that serve as the audit trail. Bottom callout pushes
-  // the headline value prop: continuous vulnerability scanning is
-  // recognized or required by all three.
-  {
-    const s = addS();
-    addChrome(s, pres, "08", "COMPLIANCE", GREEN);
-    addTitle(s, "How we help keep you compliant", "Cavelo's continuous monitoring produces the evidence auditors ask for");
-
-    const frameworks = [
-      {
+  // Driven by the "Compliance focus" dropdown on the form. The MSP picks
+  // which framework(s) the client cares about — slide shows just those,
+  // resized so a single-framework client gets a focused full-width card
+  // instead of two empty placeholder slots. compliance="none" skips the
+  // slide entirely.
+  if (compliance && compliance !== "none") {
+    const ALL_FRAMEWORKS = {
+      cmmc: {
         name: "CMMC L1 / L2",
         sub:  "NIST 800-171",
         controls: [
@@ -750,7 +745,7 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
           { label: "PII inst.",  value: fmt(risk.instancesFound) },
         ],
       },
-      {
+      nist: {
         name: "NIST CSF",
         sub:  "Cybersecurity Framework",
         controls: [
@@ -764,7 +759,7 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
           { label: "PII inst.",  value: fmt(risk.instancesFound) },
         ],
       },
-      {
+      soc2: {
         name: "SOC 2",
         sub:  "Trust Services + Privacy",
         controls: [
@@ -778,40 +773,65 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
           { label: "CIS fails",  value: fmt(risk.testsFailed) },
         ],
       },
-    ];
+    };
 
-    const cardW = 2.95, cardH = 2.5, cardY = 2.0;
-    const xs = [0.5, 3.55, 6.6];
+    // Resolve the dropdown value to the framework list to render.
+    const order = compliance === "all" ? ["cmmc", "nist", "soc2"]
+                : ALL_FRAMEWORKS[compliance] ? [compliance]
+                : ["cmmc", "nist", "soc2"]; // unknown value → fall back to all
+    const frameworks = order.map(k => ALL_FRAMEWORKS[k]);
+
+    const s = addS();
+    addChrome(s, pres, "08", "COMPLIANCE", GREEN);
+    addTitle(s, "How we help keep you compliant", "Cavelo's continuous monitoring produces the evidence auditors ask for");
+
+    // Layout adapts to count. 1 framework → one wide centered card.
+    // 2 frameworks → two side-by-side. 3 → original 3-card layout.
+    const TOTAL_W = 9.0, GAP = 0.1;
+    const n = frameworks.length;
+    let cardW, startX;
+    if (n === 1) {
+      cardW = 6.0;
+      startX = 0.5 + (TOTAL_W - cardW) / 2;
+    } else {
+      cardW = (TOTAL_W - GAP * (n - 1)) / n;
+      startX = 0.5;
+    }
+    const cardH = 2.5, cardY = 2.0;
+
     frameworks.forEach((fw, i) => {
-      const x = xs[i];
+      const x = startX + i * (cardW + GAP);
       // Card background + green left edge
       s.addShape(pres.shapes.RECTANGLE, { x, y: cardY, w: cardW, h: cardH, fill: { color: BG_MID }, line: { color: BG_MID } });
       s.addShape(pres.shapes.RECTANGLE, { x, y: cardY, w: cardW, h: 0.08, fill: { color: GREEN }, line: { color: GREEN } });
-      // Header — framework name + smaller spec name underneath
+      // Header
       s.addText(fw.name, { x: x + 0.18, y: cardY + 0.18, w: cardW - 0.36, h: 0.32, fontSize: 16, bold: true, color: WHITE, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
       s.addText(fw.sub,  { x: x + 0.18, y: cardY + 0.50, w: cardW - 0.36, h: 0.22, fontSize: 9,  italic: true, color: GREEN, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
-      // Bullet list of controls
+      // Bullets
       fw.controls.forEach((c, j) => {
         const yPos = cardY + 0.85 + j * 0.42;
         s.addShape(pres.shapes.OVAL, { x: x + 0.20, y: yPos + 0.13, w: 0.07, h: 0.07, fill: { color: GREEN }, line: { color: GREEN } });
-        s.addText(c, { x: x + 0.34, y: yPos, w: cardW - 0.5, h: 0.4, fontSize: 9, color: LIGHT, fontFace: "Calibri", align: "left", valign: "top", margin: 0 });
+        s.addText(c, { x: x + 0.34, y: yPos, w: cardW - 0.5, h: 0.4, fontSize: n === 1 ? 11 : 9, color: LIGHT, fontFace: "Calibri", align: "left", valign: "top", margin: 0 });
       });
-      // Bottom evidence strip — "this quarter" mini stats
+      // Evidence strip
       const stripY = cardY + cardH - 0.55;
       s.addShape(pres.shapes.RECTANGLE, { x: x + 0.12, y: stripY, w: cardW - 0.24, h: 0.5, fill: { color: BG }, line: { color: BG } });
       s.addText("THIS QUARTER", { x: x + 0.18, y: stripY + 0.02, w: cardW - 0.36, h: 0.18, fontSize: 7, bold: true, color: GREEN, fontFace: "Calibri", charSpacing: 1, align: "left", valign: "middle", margin: 0 });
       const cellW = (cardW - 0.36) / 3;
       fw.evidence.forEach((e, j) => {
         const ex = x + 0.18 + j * cellW;
-        s.addText(e.value, { x: ex, y: stripY + 0.18, w: cellW - 0.05, h: 0.2, fontSize: 13, bold: true, color: WHITE, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
+        s.addText(e.value, { x: ex, y: stripY + 0.18, w: cellW - 0.05, h: 0.2, fontSize: n === 1 ? 16 : 13, bold: true, color: WHITE, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
         s.addText(e.label, { x: ex, y: stripY + 0.36, w: cellW - 0.05, h: 0.14, fontSize: 7, color: MUTED, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
       });
     });
 
-    // Bottom callout — the continuous-scanning value prop, applies across all 3
+    // Bottom callout — value prop independent of which framework was picked
     s.addShape(pres.shapes.RECTANGLE, { x: 0.5, y: 4.65, w: 9, h: 0.55, fill: { color: BG_MID }, line: { color: GREEN, width: 1 } });
     s.addShape(pres.shapes.RECTANGLE, { x: 0.5, y: 4.65, w: 0.08, h: 0.55, fill: { color: GREEN }, line: { color: GREEN } });
-    s.addText("Continuous vulnerability scanning is recognized or required by all three frameworks. Cavelo runs weekly scans of your environment, so your audit trail builds automatically.",
+    const calloutText = n > 1
+      ? "Continuous vulnerability scanning is recognized or required by all three frameworks. Cavelo runs weekly scans of your environment, so your audit trail builds automatically."
+      : "Continuous vulnerability scanning is recognized or required by this framework. Cavelo runs weekly scans of your environment, so your audit trail builds automatically.";
+    s.addText(calloutText,
       { x: 0.75, y: 4.7, w: 8.6, h: 0.45, fontSize: 11, color: LIGHT, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
 
     addFootnote(s, "Cavelo provides continuous monitoring evidence; full compliance also requires governance, training, and other organizational controls outside this scope.");
@@ -940,7 +960,7 @@ exports.handler = async (event) => {
 
   try {
     const { fields, files } = await parseFormData(event);
-    const { prospectName, mspName, mspUrl, primaryColor, literacy, clientSize, logoDataUri } = fields;
+    const { prospectName, mspName, mspUrl, primaryColor, literacy, clientSize, compliance, logoDataUri } = fields;
 
     if (!files.riskPdf) {
       return { statusCode: 400, body: JSON.stringify({ error: "Data Risk Report PDF is required." }) };
@@ -973,6 +993,7 @@ exports.handler = async (event) => {
       mspUrl:       mspUrl      || "yourmsp.com",
       primaryColor: (primaryColor || "#3DBB8F").replace("#", ""),
       literacy:     literacy    || "tech_aware",
+      compliance:   compliance  || "all",
       clientSize:   clientSize  || "smb",
       logoDataUri:  logoData,
     });

@@ -455,6 +455,16 @@
             </select>
           </div>
         </div>
+        <div style="margin-top:12px">
+          <label>Compliance focus</label>
+          <select id="compliance">
+            <option value="all" selected>All three (CMMC, NIST, SOC 2)</option>
+            <option value="cmmc">CMMC L1 / L2 only</option>
+            <option value="nist">NIST CSF only</option>
+            <option value="soc2">SOC 2 only</option>
+            <option value="none">Skip — client isn't asking about compliance</option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -657,6 +667,7 @@
     const mspUrl       = document.getElementById("msp-url").value.trim();
     const literacy     = document.getElementById("literacy").value;
     const clientSize   = document.getElementById("client-size").value;
+    const compliance   = document.getElementById("compliance").value;
     const errEl        = document.getElementById("gen-err");
     errEl.classList.remove("on");
     if (!riskPDF || !mspUrl) return;
@@ -673,6 +684,7 @@
     fd.append("primaryColor", document.getElementById("primary-color-hex").value.trim());
     fd.append("literacy",     literacy);
     fd.append("clientSize",   clientSize);
+    fd.append("compliance",   compliance);
     if (logoFile) fd.append("logo", logoFile);
     else {
       const previewSrc = document.getElementById("logo-preview").src;
