@@ -724,12 +724,20 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
   }
 
   // ── SLIDE 9: COMPLIANCE EVIDENCE ─────────────────────────────────────────
-  // Driven by the "Compliance focus" dropdown on the form. The MSP picks
-  // which framework(s) the client cares about — slide shows just those,
-  // resized so a single-framework client gets a focused full-width card
-  // instead of two empty placeholder slots. compliance="none" skips the
-  // slide entirely.
-  if (compliance && compliance !== "none") {
+  // Driven by the "Compliance focus" pill checkboxes on the form. MSP
+  // checks the framework(s) that matter for that specific client.
+  // Accepts comma-separated keys ("cmmc,soc2"), the legacy single value
+  // ("cmmc"), the legacy "all" sentinel, or empty/none → skip entirely.
+  // Layout adapts: 1 framework = wide centered card, 2 = side-by-side,
+  // 3 = original 3-card grid.
+  const _resolveCompliance = (raw) => {
+    const VALID = ["cmmc", "nist", "soc2"];
+    if (!raw || raw === "none") return [];
+    if (raw === "all") return VALID;
+    return raw.split(",").map(s => s.trim()).filter(k => VALID.includes(k));
+  };
+  const _selected = _resolveCompliance(compliance);
+  if (_selected.length > 0) {
     const ALL_FRAMEWORKS = {
       cmmc: {
         name: "CMMC L1 / L2",
@@ -775,11 +783,7 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
       },
     };
 
-    // Resolve the dropdown value to the framework list to render.
-    const order = compliance === "all" ? ["cmmc", "nist", "soc2"]
-                : ALL_FRAMEWORKS[compliance] ? [compliance]
-                : ["cmmc", "nist", "soc2"]; // unknown value → fall back to all
-    const frameworks = order.map(k => ALL_FRAMEWORKS[k]);
+    const frameworks = _selected.map(k => ALL_FRAMEWORKS[k]);
 
     const s = addS();
     addChrome(s, pres, "08", "COMPLIANCE", GREEN);
@@ -807,11 +811,16 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
       // Header
       s.addText(fw.name, { x: x + 0.18, y: cardY + 0.18, w: cardW - 0.36, h: 0.32, fontSize: 16, bold: true, color: WHITE, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
       s.addText(fw.sub,  { x: x + 0.18, y: cardY + 0.50, w: cardW - 0.36, h: 0.22, fontSize: 9,  italic: true, color: GREEN, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
+      // Font sizing scales with card width. n=1 (wide) gets the most
+      // generous text; n=2 (medium) sits between; n=3 stays compact.
+      const bulletFs   = n === 1 ? 11 : n === 2 ? 10 : 9;
+      const evidenceFs = n === 1 ? 16 : n === 2 ? 14 : 13;
+
       // Bullets
       fw.controls.forEach((c, j) => {
         const yPos = cardY + 0.85 + j * 0.42;
         s.addShape(pres.shapes.OVAL, { x: x + 0.20, y: yPos + 0.13, w: 0.07, h: 0.07, fill: { color: GREEN }, line: { color: GREEN } });
-        s.addText(c, { x: x + 0.34, y: yPos, w: cardW - 0.5, h: 0.4, fontSize: n === 1 ? 11 : 9, color: LIGHT, fontFace: "Calibri", align: "left", valign: "top", margin: 0 });
+        s.addText(c, { x: x + 0.34, y: yPos, w: cardW - 0.5, h: 0.4, fontSize: bulletFs, color: LIGHT, fontFace: "Calibri", align: "left", valign: "top", margin: 0 });
       });
       // Evidence strip
       const stripY = cardY + cardH - 0.55;
@@ -820,7 +829,7 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
       const cellW = (cardW - 0.36) / 3;
       fw.evidence.forEach((e, j) => {
         const ex = x + 0.18 + j * cellW;
-        s.addText(e.value, { x: ex, y: stripY + 0.18, w: cellW - 0.05, h: 0.2, fontSize: n === 1 ? 16 : 13, bold: true, color: WHITE, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
+        s.addText(e.value, { x: ex, y: stripY + 0.18, w: cellW - 0.05, h: 0.2, fontSize: evidenceFs, bold: true, color: WHITE, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
         s.addText(e.label, { x: ex, y: stripY + 0.36, w: cellW - 0.05, h: 0.14, fontSize: 7, color: MUTED, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
       });
     });
@@ -993,7 +1002,10 @@ exports.handler = async (event) => {
       mspUrl:       mspUrl      || "yourmsp.com",
       primaryColor: (primaryColor || "#3DBB8F").replace("#", ""),
       literacy:     literacy    || "tech_aware",
-      compliance:   compliance  || "all",
+      // ?? not || — empty string means "user unchecked all bubbles" and
+      // should skip the slide. Only undefined (field absent entirely,
+      // i.e. a legacy/API caller) falls back to all 3.
+      compliance:   compliance  ?? "all",
       clientSize:   clientSize  || "smb",
       logoDataUri:  logoData,
     });

@@ -260,6 +260,27 @@
       margin-bottom: 16px;
     }
 
+    /* Compliance pill checkboxes — visually grouped pills, each toggling
+       a hidden checkbox underneath. The .checked class flips the fill +
+       border to the green theme. */
+    .comp-bubbles { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+    .comp-bubble {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-radius: 20px;
+      border: 1px solid #2D3B52; background: #1a2436;
+      font-size: 13px; color: #C5CFDF; cursor: pointer;
+      user-select: none; transition: background .12s, border-color .12s, color .12s;
+    }
+    .comp-bubble:hover { border-color: #3DBB8F; }
+    .comp-bubble.checked { background: rgba(61,187,143,0.18); border-color: #3DBB8F; color: #fff; }
+    .comp-bubble input { position: absolute; opacity: 0; pointer-events: none; }
+    .comp-bubble::before {
+      content: ""; width: 14px; height: 14px; border-radius: 50%;
+      border: 1.5px solid #2D3B52; background: transparent;
+      display: inline-block; flex-shrink: 0;
+    }
+    .comp-bubble.checked::before { background: #3DBB8F; border-color: #3DBB8F; }
+
     /* LAYOUT ROWS */
     .row { display: flex; gap: 16px; margin-bottom: 16px; }
     .row .card { flex: 1; }
@@ -457,13 +478,12 @@
         </div>
         <div style="margin-top:12px">
           <label>Compliance focus</label>
-          <select id="compliance">
-            <option value="all" selected>All three (CMMC, NIST, SOC 2)</option>
-            <option value="cmmc">CMMC L1 / L2 only</option>
-            <option value="nist">NIST CSF only</option>
-            <option value="soc2">SOC 2 only</option>
-            <option value="none">Skip — client isn't asking about compliance</option>
-          </select>
+          <div class="comp-bubbles">
+            <label class="comp-bubble"><input type="checkbox" data-comp="cmmc" checked><span>CMMC L1 / L2</span></label>
+            <label class="comp-bubble"><input type="checkbox" data-comp="nist" checked><span>NIST CSF</span></label>
+            <label class="comp-bubble"><input type="checkbox" data-comp="soc2" checked><span>SOC 2</span></label>
+          </div>
+          <div style="font-size:11px;color:#7A8AA0;margin-top:6px">Pick one or several. Uncheck all to skip the compliance slide.</div>
         </div>
       </div>
     </div>
@@ -513,6 +533,15 @@
   }
   setupDrop("dz-risk",  handleRiskPDF);
   setupDrop("dz-prior", handlePriorPDF);
+
+  // Compliance pill checkboxes — sync the .checked class on the parent
+  // label so the visual state follows the underlying input. Initialize
+  // any checkbox that's already :checked on first paint.
+  document.querySelectorAll(".comp-bubble input[type=checkbox]").forEach(cb => {
+    const setClass = () => cb.parentElement.classList.toggle("checked", cb.checked);
+    cb.addEventListener("change", setClass);
+    setClass();
+  });
 
   const ldz = document.getElementById("logo-drop");
   ldz.addEventListener("dragover",  e => { e.preventDefault(); ldz.classList.add("over"); });
@@ -667,7 +696,11 @@
     const mspUrl       = document.getElementById("msp-url").value.trim();
     const literacy     = document.getElementById("literacy").value;
     const clientSize   = document.getElementById("client-size").value;
-    const compliance   = document.getElementById("compliance").value;
+    // Collect any checked compliance bubbles into a comma-separated list.
+    // Empty string when none checked = compliance slide gets skipped.
+    const compliance = Array.from(
+      document.querySelectorAll(".comp-bubble input[type=checkbox]:checked")
+    ).map(cb => cb.dataset.comp).join(",");
     const errEl        = document.getElementById("gen-err");
     errEl.classList.remove("on");
     if (!riskPDF || !mspUrl) return;
