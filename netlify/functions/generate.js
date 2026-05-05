@@ -1051,13 +1051,14 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
       const bulletFs   = n === 1 ? 11 : n === 2 ? 10 : 9;
       const evidenceFs = n === 1 ? 16 : n === 2 ? 14 : 13;
 
-      // Bullets — Beginner gets the plain-English variants without
-      // control codes. Bullet glyph lives INSIDE the text box as a
-      // green text run so it sits on the same baseline as the body
+      // Bullets — Beginner AND Intermediate get the plain-English
+      // variants without control codes. Only Advanced sees the SI.L1 /
+      // ID.AM / CC6 references. Bullet glyph lives INSIDE the text box
+      // as a green text run so it sits on the same baseline as the body
       // text (and stays aligned even when long bullets wrap to a
       // second line). Previous version used a separately-positioned
       // pres.shapes.OVAL which drifted out of alignment with the text.
-      const bullets = literacy === "beginner" ? fw.controlsPlain : fw.controls;
+      const bullets = literacy === "advanced" ? fw.controls : fw.controlsPlain;
       bullets.forEach((c, j) => {
         const yPos = cardY + 0.85 + j * 0.42;
         s.addText([
