@@ -704,7 +704,9 @@
     ).map(cb => cb.dataset.comp).join(",");
     const errEl        = document.getElementById("gen-err");
     errEl.classList.remove("on");
-    if (!riskPDF || !mspUrl) return;
+    // Only the Risk Report PDF is hard-required. All branding fields
+     // (mspUrl included) are optional — backend has fallbacks.
+    if (!riskPDF) return;
 
     show("loading-screen");
     animateSteps();
