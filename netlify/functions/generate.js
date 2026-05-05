@@ -738,6 +738,11 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
   };
   const _selected = _resolveCompliance(compliance);
   if (_selected.length > 0) {
+    // Each framework carries two bullet variants:
+    //   controls       — full text with control codes (CMMC SI.L1-3.14.5
+    //                    etc.) for Intermediate / Advanced personas
+    //   controlsPlain  — the same ideas in plain English for Beginner,
+    //                    where the code references are noise
     const ALL_FRAMEWORKS = {
       cmmc: {
         name: "CMMC L1 / L2",
@@ -746,6 +751,11 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
           "Periodic vulnerability scanning  (SI.L1-3.14.5, RA.L2-3.11.2)",
           "Configuration baseline checks  (CM.L2-3.4.1)",
           "Access control & data location  (AC.L1, MP.L2-3.8.4)",
+        ],
+        controlsPlain: [
+          "Regular vulnerability scanning",
+          "Configuration baseline checks",
+          "Access control and data location tracking",
         ],
         evidence: [
           { label: "Risk Score", value: fmtScore(risk.riskScore) },
@@ -761,6 +771,11 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
           "Detect: continuous monitoring  (DE.CM-8)",
           "Protect: data security & access  (PR.DS, PR.AC)",
         ],
+        controlsPlain: [
+          "Identify: asset and data inventory",
+          "Detect: continuous monitoring",
+          "Protect: data security and access controls",
+        ],
         evidence: [
           { label: "Risk Score", value: fmtScore(risk.riskScore) },
           { label: "Outliers",   value: fmt(risk.outlierDirs) },
@@ -774,6 +789,11 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
           "CC6: logical access controls",
           "CC7: continuous system operations",
           "C1 / Privacy: confidential data inventory",
+        ],
+        controlsPlain: [
+          "Logical access controls",
+          "Continuous system operations monitoring",
+          "Confidential data inventory",
         ],
         evidence: [
           { label: "PII inst.",  value: fmt(risk.instancesFound) },
@@ -816,8 +836,11 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
       const bulletFs   = n === 1 ? 11 : n === 2 ? 10 : 9;
       const evidenceFs = n === 1 ? 16 : n === 2 ? 14 : 13;
 
-      // Bullets
-      fw.controls.forEach((c, j) => {
+      // Bullets — Beginner gets the plain-English variants without
+      // control codes (e.g. "Regular vulnerability scanning" instead of
+      // "...  (SI.L1-3.14.5, RA.L2-3.11.2)").
+      const bullets = literacy === "beginner" ? fw.controlsPlain : fw.controls;
+      bullets.forEach((c, j) => {
         const yPos = cardY + 0.85 + j * 0.42;
         s.addShape(pres.shapes.OVAL, { x: x + 0.20, y: yPos + 0.13, w: 0.07, h: 0.07, fill: { color: GREEN }, line: { color: GREEN } });
         s.addText(c, { x: x + 0.34, y: yPos, w: cardW - 0.5, h: 0.4, fontSize: bulletFs, color: LIGHT, fontFace: "Calibri", align: "left", valign: "top", margin: 0 });
