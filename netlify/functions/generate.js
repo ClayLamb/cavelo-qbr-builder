@@ -947,24 +947,22 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
   };
   const _selected = _resolveCompliance(compliance);
   if (_selected.length > 0) {
-    // Each framework carries two bullet variants:
-    //   controls       — full text with control codes (CMMC SI.L1-3.14.5
-    //                    etc.) for Intermediate / Advanced personas
-    //   controlsPlain  — the same ideas in plain English for Beginner,
-    //                    where the code references are noise
+    // Each framework's bullets are stored as { label, code } pairs so the
+    // human-readable "Regular vulnerability scanning" is always separable
+    // from the framework code reference "SI.L1-3.14.5". Beginner /
+    // Intermediate render label-only; Advanced renders the code as a
+    // smaller muted suffix at the end of the line. Unifies what used to
+    // be two parallel arrays (controls / controlsPlain) and avoids the
+    // mixed "CC6: foo" leading-prefix style — codes always go to the
+    // back now.
     const ALL_FRAMEWORKS = {
       cmmc: {
         name: "CMMC L1 / L2",
         sub:  "NIST 800-171",
         controls: [
-          "Periodic vulnerability scanning  (SI.L1-3.14.5, RA.L2-3.11.2)",
-          "Configuration baseline checks  (CM.L2-3.4.1)",
-          "Access control & data location  (AC.L1, MP.L2-3.8.4)",
-        ],
-        controlsPlain: [
-          "Regular vulnerability scanning",
-          "Configuration baseline checks",
-          "Access control and data location tracking",
+          { label: "Regular vulnerability scanning",        code: "SI.L1-3.14.5, RA.L2-3.11.2" },
+          { label: "Configuration baseline checks",          code: "CM.L2-3.4.1" },
+          { label: "Access control and data location",       code: "AC.L1, MP.L2-3.8.4" },
         ],
         evidence: [
           { label: "Risk Score", value: fmtScore(risk.riskScore) },
@@ -976,14 +974,9 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
         name: "NIST CSF",
         sub:  "Cybersecurity Framework",
         controls: [
-          "Identify: asset & data inventory  (ID.AM, ID.RA)",
-          "Detect: continuous monitoring  (DE.CM-8)",
-          "Protect: data security & access  (PR.DS, PR.AC)",
-        ],
-        controlsPlain: [
-          "Identify: asset and data inventory",
-          "Detect: continuous monitoring",
-          "Protect: data security and access controls",
+          { label: "Identify: asset and data inventory",     code: "ID.AM, ID.RA" },
+          { label: "Detect: continuous monitoring",          code: "DE.CM-8" },
+          { label: "Protect: data security and access",      code: "PR.DS, PR.AC" },
         ],
         evidence: [
           { label: "Risk Score", value: fmtScore(risk.riskScore) },
@@ -995,14 +988,9 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
         name: "SOC 2",
         sub:  "Trust Services + Privacy",
         controls: [
-          "CC6: logical access controls",
-          "CC7: continuous system operations",
-          "C1 / Privacy: confidential data inventory",
-        ],
-        controlsPlain: [
-          "Logical access controls",
-          "Continuous system operations monitoring",
-          "Confidential data inventory",
+          { label: "Logical access controls",                code: "CC6" },
+          { label: "Continuous system operations monitoring", code: "CC7" },
+          { label: "Confidential data inventory",            code: "C1 / Privacy" },
         ],
         evidence: [
           { label: "PII inst.",  value: fmt(risk.instancesFound) },
@@ -1045,20 +1033,24 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
       const bulletFs   = n === 1 ? 11 : n === 2 ? 10 : 9;
       const evidenceFs = n === 1 ? 16 : n === 2 ? 14 : 13;
 
-      // Bullets — Beginner AND Intermediate get the plain-English
-      // variants without control codes. Only Advanced sees the SI.L1 /
-      // ID.AM / CC6 references. Bullet glyph lives INSIDE the text box
-      // as a green text run so it sits on the same baseline as the body
-      // text (and stays aligned even when long bullets wrap to a
-      // second line). Previous version used a separately-positioned
-      // pres.shapes.OVAL which drifted out of alignment with the text.
-      const bullets = literacy === "advanced" ? fw.controls : fw.controlsPlain;
-      bullets.forEach((c, j) => {
+      // Bullets are { label, code } pairs. Beginner + Intermediate see
+      // the label only; Advanced gets the framework code reference too,
+      // rendered as a smaller muted italic suffix at the end of the line
+      // ("Regular vulnerability scanning   SI.L1-3.14.5, RA.L2-3.11.2").
+      // The bullet glyph lives inside the text box as a green text run
+      // so it sits on the same baseline as the body and stays aligned
+      // when long lines wrap.
+      const showCodes = literacy === "advanced";
+      fw.controls.forEach((c, j) => {
         const yPos = cardY + 0.85 + j * 0.42;
-        s.addText([
-          { text: "● ", options: { color: GREEN, bold: true } },
-          { text: c,    options: { color: LIGHT } },
-        ], {
+        const runs = [
+          { text: "● ",   options: { color: GREEN, bold: true } },
+          { text: c.label, options: { color: LIGHT } },
+        ];
+        if (showCodes && c.code) {
+          runs.push({ text: "   " + c.code, options: { color: MUTED, italic: true, fontSize: Math.max(7, bulletFs - 2) } });
+        }
+        s.addText(runs, {
           x: x + 0.20, y: yPos, w: cardW - 0.36, h: 0.4,
           fontSize: bulletFs, fontFace: "Calibri",
           align: "left", valign: "top", margin: 0,
