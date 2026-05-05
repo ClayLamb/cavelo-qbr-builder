@@ -837,13 +837,22 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
       const evidenceFs = n === 1 ? 16 : n === 2 ? 14 : 13;
 
       // Bullets — Beginner gets the plain-English variants without
-      // control codes (e.g. "Regular vulnerability scanning" instead of
-      // "...  (SI.L1-3.14.5, RA.L2-3.11.2)").
+      // control codes. Bullet glyph lives INSIDE the text box as a
+      // green text run so it sits on the same baseline as the body
+      // text (and stays aligned even when long bullets wrap to a
+      // second line). Previous version used a separately-positioned
+      // pres.shapes.OVAL which drifted out of alignment with the text.
       const bullets = literacy === "beginner" ? fw.controlsPlain : fw.controls;
       bullets.forEach((c, j) => {
         const yPos = cardY + 0.85 + j * 0.42;
-        s.addShape(pres.shapes.OVAL, { x: x + 0.20, y: yPos + 0.13, w: 0.07, h: 0.07, fill: { color: GREEN }, line: { color: GREEN } });
-        s.addText(c, { x: x + 0.34, y: yPos, w: cardW - 0.5, h: 0.4, fontSize: bulletFs, color: LIGHT, fontFace: "Calibri", align: "left", valign: "top", margin: 0 });
+        s.addText([
+          { text: "● ", options: { color: GREEN, bold: true } },
+          { text: c,    options: { color: LIGHT } },
+        ], {
+          x: x + 0.20, y: yPos, w: cardW - 0.36, h: 0.4,
+          fontSize: bulletFs, fontFace: "Calibri",
+          align: "left", valign: "top", margin: 0,
+        });
       });
       // Evidence strip
       const stripY = cardY + cardH - 0.55;
