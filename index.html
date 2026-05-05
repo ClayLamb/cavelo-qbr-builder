@@ -414,17 +414,27 @@
           <div class="file-badge" id="risk-file-badge"></div>
         </div>
       </div>
+      <div class="card">
+        <div class="card-label">Step 2 — Last quarter's PDF <span style="color:#4A5568;font-size:10px;font-weight:400;margin-left:6px">optional</span></div>
+        <div class="drop-zone drop-zone-optional" id="dz-prior">
+          <input type="file" id="prior-pdf-input" accept=".pdf" onchange="handlePriorPDF(this.files[0])">
+          <div class="drop-icon">📈</div>
+          <div class="drop-title" id="prior-drop-title">Drop prior Risk Report</div>
+          <div class="drop-sub">Adds trend deltas to Slide 2 (vs last quarter)</div>
+          <div class="file-badge" id="prior-file-badge"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Row 2: Client + Persona -->
     <div class="row">
       <div class="card" style="flex: 0 0 260px">
-        <div class="card-label">Step 2 — Client Details</div>
+        <div class="card-label">Step 3 — Client Details</div>
         <label>Client company name</label>
         <input type="text" id="prospect-name" placeholder="Acme Corp" style="margin-bottom:0">
       </div>
       <div class="card" style="flex: 1">
-        <div class="card-label">Step 3 — Audience Profile</div>
+        <div class="card-label">Step 4 — Audience Profile</div>
         <div class="persona-row">
           <div>
             <label>Environment size</label>
@@ -481,7 +491,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  let riskPDF = null, logoFile = null;
+  let riskPDF = null, priorPDF = null, logoFile = null;
 
   // ── DRAG & DROP ─────────────────────────────────────────────────────────
 
@@ -491,7 +501,8 @@
     dz.addEventListener("dragleave", () => dz.classList.remove("over"));
     dz.addEventListener("drop", e => { e.preventDefault(); dz.classList.remove("over"); handler(e.dataTransfer.files[0]); });
   }
-  setupDrop("dz-risk", handleRiskPDF);
+  setupDrop("dz-risk",  handleRiskPDF);
+  setupDrop("dz-prior", handlePriorPDF);
 
   const ldz = document.getElementById("logo-drop");
   ldz.addEventListener("dragover",  e => { e.preventDefault(); ldz.classList.add("over"); });
@@ -505,6 +516,14 @@
     document.getElementById("risk-file-badge").textContent = "✓ " + f.name;
     document.getElementById("risk-drop-title").textContent = "Risk Report ready";
     checkReady();
+  }
+
+  function handlePriorPDF(f) {
+    if (!f || f.type !== "application/pdf") return;
+    priorPDF = f;
+    document.getElementById("dz-prior").classList.add("ready");
+    document.getElementById("prior-file-badge").textContent = "✓ " + f.name;
+    document.getElementById("prior-drop-title").textContent = "Prior report ready";
   }
 
   function handleLogo(f) {
@@ -647,6 +666,7 @@
 
     const fd = new FormData();
     fd.append("riskPdf",      riskPDF);
+    if (priorPDF) fd.append("priorRiskPdf", priorPDF);
     fd.append("prospectName", prospectName);
     fd.append("mspName",      mspName);
     fd.append("mspUrl",       mspUrl);
@@ -695,11 +715,14 @@
   }
 
   function reset() {
-    riskPDF = null;
-    ["risk-pdf-input","prospect-name"].forEach(id => document.getElementById(id).value = "");
+    riskPDF = null; priorPDF = null;
+    ["risk-pdf-input","prior-pdf-input","prospect-name"].forEach(id => document.getElementById(id).value = "");
     document.getElementById("risk-file-badge").textContent = "";
+    document.getElementById("prior-file-badge").textContent = "";
     document.getElementById("risk-drop-title").textContent = "Drop Risk Report PDF";
+    document.getElementById("prior-drop-title").textContent = "Drop prior Risk Report";
     document.getElementById("dz-risk").classList.remove("ready","over");
+    document.getElementById("dz-prior").classList.remove("ready","over");
     document.getElementById("gen-btn").disabled = true;
     document.getElementById("gen-err").classList.remove("on");
     ["s1","s2","s3","s4"].forEach(id => document.getElementById(id).className = "lstep");

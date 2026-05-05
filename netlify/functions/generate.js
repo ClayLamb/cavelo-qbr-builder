@@ -262,6 +262,36 @@ function fmtScore(n, decimals = 1) {
   if (n == null) return "—";
   return Number(n).toFixed(decimals);
 }
+// Trend-delta formatter for Slide 2 sublabels. Returns an array of
+// pptxgen text runs so the arrow can be colored independently of the
+// rest of the line. lowerIsBetter=true for risk scores / failure
+// counts (the default and what every Slide 2 metric needs); pass
+// false for things like "approved apps" where higher is better.
+//
+// Returns null when either value is missing — callers fall back to
+// the static sublabel they used pre-trend.
+function fmtDelta(curr, prior, opts = {}) {
+  const { lowerIsBetter = true, decimals = 1, GREEN, RED, MUTED } = opts;
+  if (curr == null || prior == null) return null;
+  const diff   = curr - prior;
+  // "Steady" threshold scales with precision: scores (decimals=1) need
+  // a bigger floor than counts (decimals=0) for "no meaningful change".
+  const noise  = decimals === 1 ? 0.05 : Math.max(1, Math.round(prior * 0.01));
+  if (Math.abs(diff) < noise) {
+    return [
+      { text: "Steady ", options: { color: MUTED, italic: true } },
+      { text: `(was ${prior.toFixed(decimals)})`, options: { color: MUTED } },
+    ];
+  }
+  const better = lowerIsBetter ? diff < 0 : diff > 0;
+  const arrow  = diff < 0 ? "↓" : "↑";
+  const color  = better ? GREEN : RED;
+  return [
+    { text: `${arrow} `, options: { color, bold: true } },
+    { text: `${curr.toFixed(decimals)} (was ${prior.toFixed(decimals)})`, options: {} },
+  ];
+}
+
 // "Q2 2026", "April 2026" — both derived from current date so the deck
 // auto-rolls quarter without code changes.
 function periodLabels(date = new Date()) {
@@ -277,7 +307,7 @@ function periodLabels(date = new Date()) {
 
 // ─── DECK BUILDER ─────────────────────────────────────────────────────────────
 
-async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, literacy, clientSize, logoDataUri }) {
+async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, primaryColor, literacy, clientSize, logoDataUri }) {
   const GREEN  = primaryColor || "3DBB8F";
   const RED    = "EF4444";
   const AMBER  = "F59E0B";
@@ -392,16 +422,26 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
     const tp = risk.testsPassed, tf = risk.testsFailed;
     const totalTests = (tp != null && tf != null) ? tp + tf : null;
 
-    // Sublabels intentionally short — ~14-18 chars max — so they fit
-    // inside the 2.95"-wide cards without wrapping or clipping. The
-    // accent color already conveys severity so we don't repeat the
-    // category text alongside numeric context.
+    // Sublabels are short (~14-18 chars) so they fit inside the 2.95"-wide
+    // cards. When a prior-quarter PDF was uploaded, every sublabel becomes
+    // a colored trend line ("↓ 4.1 (was 4.4)" green for improvement, red
+    // for regression, "Steady (was 4.4)" within noise).
+    const trendOpts = { GREEN, RED, MUTED };
+    const subTrendOrStatic = (key, decimals, fallback) => {
+      if (priorRisk) {
+        const d = fmtDelta(risk[key], priorRisk[key], { ...trendOpts, decimals });
+        if (d) return d;
+      }
+      return fallback;
+    };
+
     addStatCard(s, pres, {
       x:0.5, y:2.1, w:2.95, h:1.55,
       accentColor: accentForCat(risk.riskScoreCat),
       label: "DATA RISK SCORE",
       value: fmtScore(risk.riskScore),
-      sublabel: risk.riskScoreCat || `Industry ${fmtScore(risk.industryScore)}`,
+      sublabel: subTrendOrStatic("riskScore", 1,
+        risk.riskScoreCat || `Industry ${fmtScore(risk.industryScore)}`),
       valueSize: 44,
     });
 
@@ -410,9 +450,10 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
       accentColor: AMBER,
       label: "POTENTIAL COST OF BREACH",
       value: fmtCurrency(risk.costOfBreach),
-      sublabel: risk.instancesFound != null
-        ? `${fmt(risk.instancesFound)} PII instances`
-        : "Sensitive data exposure",
+      sublabel: subTrendOrStatic("costOfBreach", 0,
+        risk.instancesFound != null
+          ? `${fmt(risk.instancesFound)} PII instances`
+          : "Sensitive data exposure"),
       valueSize: 38,
     });
 
@@ -421,9 +462,10 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
       accentColor: accentForCat(risk.vulnRiskCat),
       label: "VULNERABILITY RISK",
       value: fmtScore(risk.vulnRisk),
-      sublabel: risk.maxCVSS != null
-        ? `Max CVSS ${fmtScore(risk.maxCVSS, 1)}`
-        : (risk.vulnRiskCat || ""),
+      sublabel: subTrendOrStatic("vulnRisk", 1,
+        risk.maxCVSS != null
+          ? `Max CVSS ${fmtScore(risk.maxCVSS, 1)}`
+          : (risk.vulnRiskCat || "")),
       valueSize: 44,
     });
 
@@ -432,7 +474,8 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
       accentColor: accentForCat(risk.benchmarkRiskCat),
       label: "CIS BENCHMARK FAILURES",
       value: fmt(tf),
-      sublabel: totalTests != null ? `of ${fmt(totalTests)} tests` : "Configuration baseline",
+      sublabel: subTrendOrStatic("testsFailed", 0,
+        totalTests != null ? `of ${fmt(totalTests)} tests` : "Configuration baseline"),
       valueSize: 28,
     });
 
@@ -441,9 +484,10 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
       accentColor: AMBER,
       label: "NONCOMPLIANT HOSTS",
       value: fmt(risk.noncompliantHosts),
-      sublabel: risk.unapprovedSoftware != null
-        ? `${fmt(risk.unapprovedSoftware)} unapproved`
-        : "Software policy gaps",
+      sublabel: subTrendOrStatic("noncompliantHosts", 0,
+        risk.unapprovedSoftware != null
+          ? `${fmt(risk.unapprovedSoftware)} unapproved`
+          : "Software policy gaps"),
       valueSize: 28,
     });
 
@@ -452,9 +496,10 @@ async function buildDeck({ risk, prospectName, mspName, mspUrl, primaryColor, li
       accentColor: accentForCat(risk.permissionRiskCat),
       label: "PERMISSION RISK",
       value: fmtScore(risk.permissionRisk),
-      sublabel: risk.outlierDirs != null
-        ? `${fmt(risk.outlierDirs)} outliers`
-        : (risk.permissionRiskCat || ""),
+      sublabel: subTrendOrStatic("permissionRisk", 1,
+        risk.outlierDirs != null
+          ? `${fmt(risk.outlierDirs)} outliers`
+          : (risk.permissionRiskCat || "")),
       valueSize: 28,
     });
   }
@@ -811,6 +856,14 @@ exports.handler = async (event) => {
     const riskText = await extractPDFText(files.riskPdf.buffer);
     const risk = parseRiskReport(riskText);
 
+    // Optional prior-quarter PDF — if provided, parse it the same way and
+    // hand the result to buildDeck so Slide 2 can render trend deltas.
+    let priorRisk = null;
+    if (files.priorRiskPdf) {
+      const priorText = await extractPDFText(files.priorRiskPdf.buffer);
+      priorRisk = parseRiskReport(priorText);
+    }
+
     // Logo data URI
     let logoData = logoDataUri || null;
     if (files.logo) {
@@ -820,6 +873,7 @@ exports.handler = async (event) => {
     // Build deck
     const pptxBuffer = await buildDeck({
       risk,
+      priorRisk,
       prospectName: prospectName || "Client",
       mspName:      mspName     || "Your MSP",
       mspUrl:       mspUrl      || "yourmsp.com",
