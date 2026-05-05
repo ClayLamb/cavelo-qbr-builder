@@ -351,11 +351,11 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
     s.addText(mspUrl.replace(/^https?:\/\//,""), { x:0.5, y:5.2, w:4, h:0.3, fontSize:10, color:MUTED, fontFace:"Calibri", bold:true, align:"left", valign:"middle", margin:0 });
   }
 
-  // ── SLIDE: DEFINITIONS (Non-Technical and Business personas only) ───────
+  // ── SLIDE: DEFINITIONS (Beginner and Intermediate personas only) ────────
   // Inserted right after the cover so non-expert readers (owners / office
-  // managers / business stakeholders) have plain-English vocabulary before
-  // hitting any data. Tech-aware and above skip this slide entirely.
-  if (literacy === "non_technical" || literacy === "business") {
+  // managers / business or ops leads) have plain-English vocabulary before
+  // hitting any data. Advanced readers skip this slide entirely.
+  if (literacy === "beginner" || literacy === "intermediate") {
     const s = addS();
     addChrome(s, pres, "00", "DEFINITIONS", GREEN);
     addTitle(s, "A few quick definitions", "Before we get into the numbers, here is what a few of these terms actually mean.");
@@ -1001,7 +1001,7 @@ exports.handler = async (event) => {
       mspName:      mspName     || "Your MSP",
       mspUrl:       mspUrl      || "yourmsp.com",
       primaryColor: (primaryColor || "#3DBB8F").replace("#", ""),
-      literacy:     literacy    || "tech_aware",
+      literacy:     literacy    || "intermediate",
       // ?? not || — empty string means "user unchecked all bubbles" and
       // should skip the slide. Only undefined (field absent entirely,
       // i.e. a legacy/API caller) falls back to all 3.
