@@ -866,13 +866,14 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
       });
     });
 
-    // Bottom callout — value prop independent of which framework was picked
+    // Bottom callout — value prop independent of which framework was picked.
+    // Wording stays neutral ("this framework" / "these frameworks") so it
+    // never implies an omitted framework. "All three frameworks" wording
+    // would awkwardly highlight what was unchecked.
     s.addShape(pres.shapes.RECTANGLE, { x: 0.5, y: 4.65, w: 9, h: 0.55, fill: { color: BG_MID }, line: { color: GREEN, width: 1 } });
     s.addShape(pres.shapes.RECTANGLE, { x: 0.5, y: 4.65, w: 0.08, h: 0.55, fill: { color: GREEN }, line: { color: GREEN } });
-    const calloutText = n > 1
-      ? "Continuous vulnerability scanning is recognized or required by all three frameworks. Cavelo runs weekly scans of your environment, so your audit trail builds automatically."
-      : "Continuous vulnerability scanning is recognized or required by this framework. Cavelo runs weekly scans of your environment, so your audit trail builds automatically.";
-    s.addText(calloutText,
+    const subject = n > 1 ? "these frameworks" : "this framework";
+    s.addText(`Continuous vulnerability scanning is recognized or required by ${subject}. Cavelo runs weekly scans of your environment, so your audit trail builds automatically.`,
       { x: 0.75, y: 4.7, w: 8.6, h: 0.45, fontSize: 11, color: LIGHT, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
 
     addFootnote(s, "Cavelo provides continuous monitoring evidence; full compliance also requires governance, training, and other organizational controls outside this scope.");
