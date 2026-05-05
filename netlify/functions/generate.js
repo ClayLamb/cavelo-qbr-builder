@@ -699,10 +699,10 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
     addFootnote(s, "CVSS = Common Vulnerability Scoring System. EPSS = Exploit Prediction Scoring System. Source: Cavelo Risk Report.");
   }
 
-  // ── SLIDE 8: COMPLIANCE & BENCHMARKS ────────────────────────────────────
+  // ── SLIDE 8: CIS BENCHMARKS ─────────────────────────────────────────────
   {
     const s = addS();
-    addChrome(s, pres, "07", "COMPLIANCE", GREEN);
+    addChrome(s, pres, "07", "BENCHMARKS", GREEN);
     addTitle(s, "CIS benchmark compliance", "Configuration hardening across your Windows fleet");
 
     const totalTests = risk.testsPassed + risk.testsFailed;
@@ -723,7 +723,101 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
       : "CIS = Center for Internet Security benchmarks. Source: Cavelo Data Risk Report.");
   }
 
-  // ── SLIDE 9: VISIBILITY GAPS ─────────────────────────────────────────────
+  // ── SLIDE 9: COMPLIANCE EVIDENCE ─────────────────────────────────────────
+  // Maps Cavelo's continuous controls to the three frameworks MSPs are
+  // most often asked about (CMMC L1/L2, NIST CSF, SOC 2). Each card lists
+  // the specific controls Cavelo evidences and the exact metrics from
+  // THIS quarter that serve as the audit trail. Bottom callout pushes
+  // the headline value prop: continuous vulnerability scanning is
+  // recognized or required by all three.
+  {
+    const s = addS();
+    addChrome(s, pres, "08", "COMPLIANCE", GREEN);
+    addTitle(s, "How we help keep you compliant", "Cavelo's continuous monitoring produces the evidence auditors ask for");
+
+    const frameworks = [
+      {
+        name: "CMMC L1 / L2",
+        sub:  "NIST 800-171",
+        controls: [
+          "Periodic vulnerability scanning  (SI.L1-3.14.5, RA.L2-3.11.2)",
+          "Configuration baseline checks  (CM.L2-3.4.1)",
+          "Access control & data location  (AC.L1, MP.L2-3.8.4)",
+        ],
+        evidence: [
+          { label: "Risk Score", value: fmtScore(risk.riskScore) },
+          { label: "CIS fails",  value: fmt(risk.testsFailed) },
+          { label: "PII inst.",  value: fmt(risk.instancesFound) },
+        ],
+      },
+      {
+        name: "NIST CSF",
+        sub:  "Cybersecurity Framework",
+        controls: [
+          "Identify: asset & data inventory  (ID.AM, ID.RA)",
+          "Detect: continuous monitoring  (DE.CM-8)",
+          "Protect: data security & access  (PR.DS, PR.AC)",
+        ],
+        evidence: [
+          { label: "Risk Score", value: fmtScore(risk.riskScore) },
+          { label: "Outliers",   value: fmt(risk.outlierDirs) },
+          { label: "PII inst.",  value: fmt(risk.instancesFound) },
+        ],
+      },
+      {
+        name: "SOC 2",
+        sub:  "Trust Services + Privacy",
+        controls: [
+          "CC6: logical access controls",
+          "CC7: continuous system operations",
+          "C1 / Privacy: confidential data inventory",
+        ],
+        evidence: [
+          { label: "PII inst.",  value: fmt(risk.instancesFound) },
+          { label: "Perm risk",  value: fmtScore(risk.permissionRisk) },
+          { label: "CIS fails",  value: fmt(risk.testsFailed) },
+        ],
+      },
+    ];
+
+    const cardW = 2.95, cardH = 2.5, cardY = 2.0;
+    const xs = [0.5, 3.55, 6.6];
+    frameworks.forEach((fw, i) => {
+      const x = xs[i];
+      // Card background + green left edge
+      s.addShape(pres.shapes.RECTANGLE, { x, y: cardY, w: cardW, h: cardH, fill: { color: BG_MID }, line: { color: BG_MID } });
+      s.addShape(pres.shapes.RECTANGLE, { x, y: cardY, w: cardW, h: 0.08, fill: { color: GREEN }, line: { color: GREEN } });
+      // Header — framework name + smaller spec name underneath
+      s.addText(fw.name, { x: x + 0.18, y: cardY + 0.18, w: cardW - 0.36, h: 0.32, fontSize: 16, bold: true, color: WHITE, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
+      s.addText(fw.sub,  { x: x + 0.18, y: cardY + 0.50, w: cardW - 0.36, h: 0.22, fontSize: 9,  italic: true, color: GREEN, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
+      // Bullet list of controls
+      fw.controls.forEach((c, j) => {
+        const yPos = cardY + 0.85 + j * 0.42;
+        s.addShape(pres.shapes.OVAL, { x: x + 0.20, y: yPos + 0.13, w: 0.07, h: 0.07, fill: { color: GREEN }, line: { color: GREEN } });
+        s.addText(c, { x: x + 0.34, y: yPos, w: cardW - 0.5, h: 0.4, fontSize: 9, color: LIGHT, fontFace: "Calibri", align: "left", valign: "top", margin: 0 });
+      });
+      // Bottom evidence strip — "this quarter" mini stats
+      const stripY = cardY + cardH - 0.55;
+      s.addShape(pres.shapes.RECTANGLE, { x: x + 0.12, y: stripY, w: cardW - 0.24, h: 0.5, fill: { color: BG }, line: { color: BG } });
+      s.addText("THIS QUARTER", { x: x + 0.18, y: stripY + 0.02, w: cardW - 0.36, h: 0.18, fontSize: 7, bold: true, color: GREEN, fontFace: "Calibri", charSpacing: 1, align: "left", valign: "middle", margin: 0 });
+      const cellW = (cardW - 0.36) / 3;
+      fw.evidence.forEach((e, j) => {
+        const ex = x + 0.18 + j * cellW;
+        s.addText(e.value, { x: ex, y: stripY + 0.18, w: cellW - 0.05, h: 0.2, fontSize: 13, bold: true, color: WHITE, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
+        s.addText(e.label, { x: ex, y: stripY + 0.36, w: cellW - 0.05, h: 0.14, fontSize: 7, color: MUTED, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
+      });
+    });
+
+    // Bottom callout — the continuous-scanning value prop, applies across all 3
+    s.addShape(pres.shapes.RECTANGLE, { x: 0.5, y: 4.65, w: 9, h: 0.55, fill: { color: BG_MID }, line: { color: GREEN, width: 1 } });
+    s.addShape(pres.shapes.RECTANGLE, { x: 0.5, y: 4.65, w: 0.08, h: 0.55, fill: { color: GREEN }, line: { color: GREEN } });
+    s.addText("Continuous vulnerability scanning is recognized or required by all three frameworks. Cavelo runs weekly scans of your environment, so your audit trail builds automatically.",
+      { x: 0.75, y: 4.7, w: 8.6, h: 0.45, fontSize: 11, color: LIGHT, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
+
+    addFootnote(s, "Cavelo provides continuous monitoring evidence; full compliance also requires governance, training, and other organizational controls outside this scope.");
+  }
+
+  // ── SLIDE 10: VISIBILITY GAPS ────────────────────────────────────────────
   // Three cards highlighting coverage and exposure gaps from the Risk
   // Report. Outlier-directories and noncompliant-hosts come straight from
   // the parser; the sublabels rotate based on whether their counterpart
@@ -731,7 +825,7 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
   // value is missing.
   {
     const s = addS();
-    addChrome(s, pres, "08", "VISIBILITY", GREEN);
+    addChrome(s, pres, "09", "VISIBILITY", GREEN);
     addTitle(s, "Where we don't have visibility", "Coverage gaps and outlier exposure");
 
     addStatCard(s, pres, {
@@ -773,7 +867,7 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
   // (CIS test fail count, outlier dir count, vuln risk category).
   {
     const s = addS();
-    addChrome(s, pres, "09", "NEXT QUARTER", GREEN);
+    addChrome(s, pres, "10", "NEXT QUARTER", GREEN);
     addTitle(s, `${period.nextQuarter} priorities`, "Three commitments for the next 90 days");
 
     const priorities = [
