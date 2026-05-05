@@ -960,9 +960,11 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
         name: "CMMC L1 / L2",
         sub:  "NIST 800-171",
         controls: [
-          { label: "Regular vulnerability scanning",        code: "SI.L1-3.14.5, RA.L2-3.11.2" },
-          { label: "Configuration baseline checks",          code: "CM.L2-3.4.1" },
-          { label: "Access control and data location",       code: "AC.L1, MP.L2-3.8.4" },
+          { label: "Regular vulnerability scanning",          code: "SI.L1-3.14.5, RA.L2-3.11.2" },
+          { label: "Configuration baseline checks",            code: "CM.L2-3.4.1" },
+          { label: "Access control monitoring",                code: "AC.L1-3.1.1, AC.L1-3.1.2" },
+          { label: "Sensitive data discovery and location",    code: "MP.L2-3.8.4" },
+          { label: "Risk assessment scoring",                  code: "RA.L2-3.11.1" },
         ],
         evidence: [
           { label: "Risk Score", value: fmtScore(risk.riskScore) },
@@ -974,9 +976,11 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
         name: "NIST CSF",
         sub:  "Cybersecurity Framework",
         controls: [
-          { label: "Identify: asset and data inventory",     code: "ID.AM, ID.RA" },
-          { label: "Detect: continuous monitoring",          code: "DE.CM-8" },
-          { label: "Protect: data security and access",      code: "PR.DS, PR.AC" },
+          { label: "Identify: asset and data inventory",       code: "ID.AM, ID.RA" },
+          { label: "Identify: risk assessment scoring",        code: "ID.RA-1, ID.RA-3" },
+          { label: "Protect: data security and access",        code: "PR.DS, PR.AC" },
+          { label: "Detect: continuous monitoring",            code: "DE.CM-8" },
+          { label: "Detect: anomalies and events",             code: "DE.AE-3" },
         ],
         evidence: [
           { label: "Risk Score", value: fmtScore(risk.riskScore) },
@@ -988,9 +992,11 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
         name: "SOC 2",
         sub:  "Trust Services + Privacy",
         controls: [
-          { label: "Logical access controls",                code: "CC6" },
-          { label: "Continuous system operations monitoring", code: "CC7" },
-          { label: "Confidential data inventory",            code: "C1 / Privacy" },
+          { label: "Logical access controls",                  code: "CC6.1, CC6.2" },
+          { label: "Vulnerability management",                 code: "CC6.6, CC7.1" },
+          { label: "Continuous system operations monitoring",  code: "CC7" },
+          { label: "Change management visibility",             code: "CC8.1" },
+          { label: "Confidential data inventory",              code: "C1 / Privacy" },
         ],
         evidence: [
           { label: "PII inst.",  value: fmt(risk.instancesFound) },
@@ -1018,7 +1024,10 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
       cardW = (TOTAL_W - GAP * (n - 1)) / n;
       startX = 0.5;
     }
-    const cardH = 2.5, cardY = 2.0;
+    // Card height extended from 2.5 -> 3.05 to fit the 5-bullet list
+    // (was 3 bullets). The freed space comes from removing the bottom
+    // "continuous scanning" callout that used to live at y=4.65.
+    const cardH = 3.05, cardY = 2.0;
 
     frameworks.forEach((fw, i) => {
       const x = startX + i * (cardW + GAP);
@@ -1035,14 +1044,20 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
 
       // Bullets are { label, code } pairs. Beginner + Intermediate see
       // the label only; Advanced gets the framework code reference too,
-      // rendered as a smaller muted italic suffix at the end of the line
-      // ("Regular vulnerability scanning   SI.L1-3.14.5, RA.L2-3.11.2").
-      // The bullet glyph lives inside the text box as a green text run
-      // so it sits on the same baseline as the body and stays aligned
-      // when long lines wrap.
+      // rendered as a smaller muted italic suffix at the end of the line.
+      // Bullet glyph lives inside the text box as a green text run so
+      // it sits on the same baseline as the body and stays aligned when
+      // long lines wrap.
+      //
+      // Bullet spacing auto-fits the available height between the header
+      // (cardY + 0.85) and the evidence strip (cardY + cardH - 0.55),
+      // capped at 0.42 so 3-bullet cards don't get sparse.
       const showCodes = literacy === "advanced";
+      const bulletAreaH = cardH - 0.85 - 0.55;
+      const bulletSpacing = Math.min(0.42, bulletAreaH / fw.controls.length);
+      const bulletH = Math.min(0.4, bulletSpacing - 0.02);
       fw.controls.forEach((c, j) => {
-        const yPos = cardY + 0.85 + j * 0.42;
+        const yPos = cardY + 0.85 + j * bulletSpacing;
         const runs = [
           { text: "● ",   options: { color: GREEN, bold: true } },
           { text: c.label, options: { color: LIGHT } },
@@ -1051,7 +1066,7 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
           runs.push({ text: "   " + c.code, options: { color: MUTED, italic: true, fontSize: Math.max(7, bulletFs - 2) } });
         }
         s.addText(runs, {
-          x: x + 0.20, y: yPos, w: cardW - 0.36, h: 0.4,
+          x: x + 0.20, y: yPos, w: cardW - 0.36, h: bulletH,
           fontSize: bulletFs, fontFace: "Calibri",
           align: "left", valign: "top", margin: 0,
         });
@@ -1068,15 +1083,11 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
       });
     });
 
-    // Bottom callout — value prop independent of which framework was picked.
-    // Wording stays neutral ("this framework" / "these frameworks") so it
-    // never implies an omitted framework. "All three frameworks" wording
-    // would awkwardly highlight what was unchecked.
-    s.addShape(pres.shapes.RECTANGLE, { x: 0.5, y: 4.65, w: 9, h: 0.55, fill: { color: BG_MID }, line: { color: GREEN, width: 1 } });
-    s.addShape(pres.shapes.RECTANGLE, { x: 0.5, y: 4.65, w: 0.08, h: 0.55, fill: { color: GREEN }, line: { color: GREEN } });
-    const subject = n > 1 ? "these frameworks" : "this framework";
-    s.addText(`Continuous vulnerability scanning is recognized or required by ${subject}. Cavelo runs weekly scans of your environment, so your audit trail builds automatically.`,
-      { x: 0.75, y: 4.7, w: 8.6, h: 0.45, fontSize: 11, color: LIGHT, fontFace: "Calibri", align: "left", valign: "middle", margin: 0 });
+    // Bottom callout removed — its real estate now goes to taller cards
+    // with 5-bullet control lists per framework. The continuous-scanning
+    // value prop is implied by the "Continuous system operations" /
+    // "Detect: continuous monitoring" / "Periodic vulnerability
+    // scanning" bullets that now appear on every card.
 
     addFootnote(s, "Cavelo provides continuous monitoring evidence; full compliance also requires governance, training, and other organizational controls outside this scope.");
   }
