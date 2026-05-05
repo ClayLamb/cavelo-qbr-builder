@@ -251,7 +251,7 @@ function addChrome(s, pres, sectionNum, sectionLabel, accentColor = "3DBB8F") {
     x: 0, y: 0, w: 0.18, h: 5.625,
     fill: { color: accentColor }, line: { color: accentColor },
   });
-  // Cavelo pill
+  // Cavelo pill (top-left)
   s.addShape(pres.shapes.ROUNDED_RECTANGLE, {
     x: 0.5, y: 0.4, w: 1.0, h: 0.32,
     fill: { color: accentColor }, line: { color: accentColor }, rectRadius: 0.16,
@@ -261,16 +261,10 @@ function addChrome(s, pres, sectionNum, sectionLabel, accentColor = "3DBB8F") {
     fontSize: 11, bold: true, color: "FFFFFF", fontFace: "Calibri",
     align: "center", valign: "middle", margin: 0,
   });
-  // Section badge
-  s.addShape(pres.shapes.ROUNDED_RECTANGLE, {
-    x: 7.7, y: 0.4, w: 1.8, h: 0.32,
-    fill: { color: "253347" }, line: { color: accentColor, width: 1 }, rectRadius: 0.16,
-  });
-  s.addText(`${sectionNum}  ${sectionLabel}`, {
-    x: 7.7, y: 0.4, w: 1.8, h: 0.32,
-    fontSize: 10, bold: true, color: accentColor, fontFace: "Calibri",
-    align: "center", valign: "middle", margin: 0,
-  });
+  // Top-right section badge intentionally removed for a cleaner header.
+  // Function still accepts sectionNum + sectionLabel so existing call
+  // sites need no changes; the args are simply unused now. Drop them
+  // when refactoring callers if you prefer.
 }
 
 function addTitle(s, title, subtitle) {
