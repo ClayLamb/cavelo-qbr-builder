@@ -593,18 +593,21 @@
   }
 
   // ── INPUT WATCHERS ───────────────────────────────────────────────────────
-  ["prospect-name", "msp-url"].forEach(id =>
-    document.getElementById(id).addEventListener("input", checkReady)
-  );
+  // Only the client name + Risk Report PDF are required to generate.
+  // All branding fields (MSP name/URL/logo/color/contact info) are
+  // optional — the deck falls back to Calibri-on-Cavelo-green defaults
+  // and skips empty contact info when nothing is provided.
+  document.getElementById("prospect-name").addEventListener("input", checkReady);
+  // Auto-prepend https:// when an MSP URL is provided without a scheme.
+  // Still optional — blur handler is a no-op on empty values.
   document.getElementById("msp-url").addEventListener("blur", function() {
     let v = this.value.trim();
     if (v && !/^https?:\/\//i.test(v)) this.value = "https://" + v;
   });
 
   function checkReady() {
-    const name   = document.getElementById("prospect-name").value.trim();
-    const mspUrl = document.getElementById("msp-url").value.trim();
-    document.getElementById("gen-btn").disabled = !(riskPDF && name.length > 0 && mspUrl.length > 4);
+    const name = document.getElementById("prospect-name").value.trim();
+    document.getElementById("gen-btn").disabled = !(riskPDF && name.length > 0);
   }
 
   // ── BRAND PANEL ──────────────────────────────────────────────────────────
