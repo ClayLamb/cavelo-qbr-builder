@@ -1,5 +1,5 @@
 // generate.js
-// Parses a Cavelo Data Risk Report PDF and builds a 10-slide QBR deck
+// Parses a Cavelo Data Risk Report PDF and builds a 10-slide Technology Review deck
 // using pptxgenjs. Returns .pptx as a binary download.
 
 const busboy   = require("busboy");
@@ -376,7 +376,7 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
 
   const pres = new pptxgen();
   pres.layout  = "LAYOUT_16x9";
-  pres.title   = `${prospectName} QBR — ${period.quarter}`;
+  pres.title   = `${prospectName} Technology Review — ${period.quarter}`;
   pres.author  = mspName;
 
   const addS = () => { const s = pres.addSlide(); s.background = { color: BG }; return s; };
@@ -397,7 +397,7 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
     const s = addS();
     addChrome(s, pres, "", "", GREEN);
     s.addText(period.quarter, { x:0.5, y:1.7, w:9, h:0.4, fontSize:16, color:GREEN, fontFace:"Calibri", bold:true, align:"left", valign:"middle", margin:0, charSpacing:2 });
-    s.addText("Quarterly Business Review", { x:0.5, y:2.15, w:9, h:0.85, fontSize:48, bold:true, color:WHITE, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
+    s.addText("Technology Review", { x:0.5, y:2.15, w:9, h:0.85, fontSize:48, bold:true, color:WHITE, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
     s.addText(prospectName, { x:0.5, y:3.05, w:9, h:0.55, fontSize:28, color:GREEN, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
     s.addText(`Prepared by ${mspName}  ·  ${period.monthYear}`, { x:0.5, y:3.7, w:9, h:0.3, fontSize:12, color:MUTED, fontFace:"Calibri", align:"left", valign:"middle", margin:0 });
     s.addText(mspUrl.replace(/^https?:\/\//,""), { x:0.5, y:5.2, w:4, h:0.3, fontSize:10, color:MUTED, fontFace:"Calibri", bold:true, align:"left", valign:"middle", margin:0 });
@@ -841,7 +841,7 @@ async function buildDeck({ risk, priorRisk, prospectName, mspName, mspUrl, prima
       const s = addS();
       addChrome(s, pres, "", "MONITORING", GREEN);
       addTitle(s, "Continuous monitoring posture",
-        "What's running in your environment between QBRs");
+        "What's running in your environment between Technology Reviews");
 
       const cards = [
         { name: "DATA DISCOVERY",         block: m.dataCost,    accent: GREEN },
@@ -1258,7 +1258,7 @@ exports.handler = async (event) => {
 
     const safeName  = (prospectName || "Client").replace(/[^a-zA-Z0-9]/g, "_");
     const safePeriod = periodLabels().quarter.replace(/\s+/g, "_");
-    const filename  = `${safeName}_QBR_${safePeriod}.pptx`;
+    const filename  = `${safeName}_Technology_Review_${safePeriod}.pptx`;
 
     return {
       statusCode: 200,

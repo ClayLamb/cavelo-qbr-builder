@@ -1,7 +1,7 @@
 {
   "name": "cavelo-qbr-builder",
   "version": "1.0.0",
-  "description": "Cavelo QBR Deck Builder — two PDFs in, one PowerPoint out",
+  "description": "Cavelo Technology Review Deck Builder — two PDFs in, one PowerPoint out",
   "scripts": {
     "dev": "netlify dev"
   },

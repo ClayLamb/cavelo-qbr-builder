@@ -1,6 +1,6 @@
-# Cavelo QBR Deck Builder
+# Cavelo Technology Review Deck Builder
 
-Upload a Cavelo **Data Risk Report** PDF — get a client-ready branded PowerPoint QBR deck in seconds.
+Upload a Cavelo **Data Risk Report** PDF — get a client-ready branded PowerPoint Technology Review deck in seconds.
 
 Same architecture as [flash-deck-builder](https://github.com/ClayLamb/flash-deck-builder).
 
@@ -36,7 +36,7 @@ npm run dev
 
 1. MSP saves their brand profile (logo, colors, contact info)
 2. Uploads a Cavelo Data Risk Report PDF + enters client name + selects audience profile
-3. Netlify function parses the PDF, extracts key metrics, builds a 10-slide QBR deck
+3. Netlify function parses the PDF, extracts key metrics, builds a 10-slide Technology Review deck
 4. PowerPoint downloads instantly — nothing stored
 
 ---

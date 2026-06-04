@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>QBR Deck Builder — Cavelo</title>
+  <title>Technology Review Deck Builder — Cavelo</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -334,13 +334,13 @@
 <body>
 
 <header>
-  <div class="header-title">QBR <span>Deck Builder</span></div>
+  <div class="header-title">Technology Review <span>Deck Builder</span></div>
   <div class="badge">🔒 Zero data retention</div>
 </header>
 
 <main>
   <div class="hero">
-    <h1>Risk Report → <span>QBR Power Point</span></h1>
+    <h1>Risk Report → <span>Technology Review Power Point</span></h1>
     <p>Upload a Cavelo Data Risk Report PDF. Get a client-ready PowerPoint in seconds.</p>
   </div>
 
@@ -487,14 +487,14 @@
     </div>
 
     <div class="err" id="gen-err"></div>
-    <button class="btn btn-green" id="gen-btn" onclick="generate()" disabled>Generate QBR Deck →</button>
+    <button class="btn btn-green" id="gen-btn" onclick="generate()" disabled>Generate Technology Review Deck →</button>
   </div>
 
   <!-- LOADING -->
   <div id="loading-screen" class="screen">
     <div class="loading-wrap">
       <div class="spin"></div>
-      <div class="loading-title">Building your QBR deck…</div>
+      <div class="loading-title">Building your Technology Review deck…</div>
       <div class="lstep" id="s1">📊 Reading Data Risk Report</div>
       <div class="lstep" id="s2">🎨 Matching persona &amp; literacy level</div>
       <div class="lstep" id="s3">📐 Building slides</div>
@@ -506,7 +506,7 @@
   <div id="success-screen" class="screen">
     <div class="success-wrap">
       <div class="sicon">🎉</div>
-      <div class="stitle">Your QBR deck is ready</div>
+      <div class="stitle">Your Technology Review deck is ready</div>
       <div class="ssub" id="s-filename"></div>
       <div class="notice">🔒 <strong>Zero data retained.</strong> The PDF was processed entirely in memory and never written to disk or stored anywhere on our servers.</div>
       <button class="btn btn-outline" onclick="reset()">Build another deck</button>
@@ -515,7 +515,7 @@
 
 </main>
 
-<footer>QBR Deck Builder &nbsp;·&nbsp; Powered by Cavelo &nbsp;·&nbsp; Zero data retention</footer>
+<footer>Technology Review Deck Builder &nbsp;·&nbsp; Powered by Cavelo &nbsp;·&nbsp; Zero data retention</footer>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -738,7 +738,7 @@
       }
       const disp = res.headers.get("Content-Disposition") || "";
       const m    = disp.match(/filename="([^"]+)"/);
-      const name = m ? m[1] : "QBR_Deck.pptx";
+      const name = m ? m[1] : "Technology_Review_Deck.pptx";
       const blob = await res.blob();
       const a    = document.createElement("a");
       a.href = URL.createObjectURL(blob);
